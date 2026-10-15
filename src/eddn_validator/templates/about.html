@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}How scoring works · EDDN Validator{% endblock %}
+{% block style %}
+  .prose { max-width: 760px; }
+  .prose li { margin-bottom: 6px; }
+  .layers { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 8px; }
+  .layers li { padding: 10px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+  .layers .vs { display: block; color: var(--text-2); font-size: .88rem; margin-top: 2px; }
+  .faq dt { font-weight: 650; margin-top: 14px; }
+  .faq dd { margin: 4px 0 0; }
+  .weights { font-variant-numeric: tabular-nums; }
+{% endblock %}
+{% block content %}
+<div class="prose">
+<h1>How scoring works</h1>
+<p class="sub">Every message on the public EDDN relay has already passed EDDN's own format check. This site
+looks at what that check cannot see: whether an application follows the rest of EDDN's written rules, and
+whether its data agrees with what four long-established senders report.</p>
+
+<h2>The trusted reference apps</h2>
+<p>E:D Market Connector (Windows and Linux), EDDiscovery, EDDLite and EDO Materials Helper, the "big four".
+Only each one's three newest releases count. They don't always agree with each other, so "expected" means
+<em>every</em> reference app that sends that kind of message does it.</p>
+
+<h2>Five layers, in plain English</h2>
+<p class="sub">Each kind of message an app sends is scored on five layers. Each layer has its own page with the
+full list of what it checks.</p>
+<ul class="layers">
+  <li><strong><a href="/about/pairing">Pairing</a></strong>: when an app reports a system, body or station, is it
+    the same as what the big four reported about that same place? Only details that never change are compared
+    (name, position, mass, orbit and so on), not things like distance that differ for every player.
+    <span class="vs">Compared with: the reference record for the same object, one message at a time. Six reports
+    about the same body are six comparisons ("5 matched, 1 disagree").</span></li>
+  <li><strong><a href="/about/rules">Rules</a></strong>: does each message follow the rules EDDN and EDCD have
+    written down? Does it break or bend any of them?
+    <span class="vs">Compared with: EDDN's documentation, each message on its own.</span></li>
+  <li><strong><a href="/about/fields">Fields</a></strong>: which fields does the app send? Does it leave out fields
+    all of the big four send, or add fields none of them send?
+    <span class="vs">Compared with: how often the big four include each field in this kind of message.</span></li>
+  <li><strong><a href="/about/values">Values</a></strong>: do the contents look right? This compares with a
+    statistical profile of what the big four send in each field, a profile that shifts over time. Being a bit out of
+    range is no big deal, since the galaxy has plenty of rare extremes: it's shown as a note and not counted. Only
+    clearly wrong values count: the wrong kind of value, or something way out of line, like a units mistake.
+    <span class="vs">Compared with: the big four's overall profile for that field, not specific messages.</span></li>
+  <li><strong><a href="/about/behaviour">Behaviour</a></strong>: how well does the app behave? Does it send
+    duplicates, events with wrong timestamps, or too many at once? Even the big four do some of this, so only the
+    amount worse than them counts.
+    <span class="vs">Compared with: the big four's own rates for this kind of message.</span></li>
+</ul>
+
+<h2>How the grade is worked out</h2>
+<ul>
+  <li>Each kind of message gets a score out of 100, a weighted mix of the layers that had something to check:
+    <span class="weights">rules 30%, fields 20%, values 20%, pairing 20%, behaviour 10%</span>. A layer with nothing
+    to check (no paired messages, say) is left out and the others are scaled up.</li>
+  <li>Findings are <strong>serious</strong> (count fully), <strong>minor</strong> (count half) or <strong>notes</strong>
+    (shown, never counted).</li>
+  <li>The overall score combines the kinds of message by how many of each the app sent, so a problem in the app's
+    busiest message type cannot hide behind many small clean ones. Kinds with fewer than 5 messages are shown but not
+    scored; fewer than 30 count half.</li>
+  <li>Kinds of message the app never sends are listed but never counted: many tools send only what they are built for.</li>
+  <li>Grades: <span class="status good">A</span> 90 and over · <span class="status warning">B</span> 80 ·
+    <span class="status warning">C</span> 70 · <span class="status serious">D</span> 60 ·
+    <span class="status critical">F</span> below 60.</li>
+</ul>
+
+<h2>How to read a scorecard</h2>
+<ul>
+  <li>Each app version has one scorecard, covering all its messages still on file (about six months). The four
+    reference apps' own cards cover their last 7 days.</li>
+  <li>The <strong>Event types</strong> table has one row per kind of message, with its score and each layer's score.
+    Hover over any number for how it was worked out; click a row to see the findings behind it.</li>
+  <li>Inside a row, each section starts with a line saying what it compares against. Findings marked
+    <em>not scored</em> are notes: there for interest, with no effect on the score.</li>
+  <li>In the Values table each row is <strong>one field</strong>, and its Messages column counts the messages with
+    that finding. One unusual message can appear in several rows, so the line above the table gives the number of
+    distinct messages.</li>
+  <li>The <strong>Versions</strong> table at the bottom lists every version of the app with its own grade.</li>
+</ul>
+
+<h2>Common questions</h2>
+<dl class="faq">
+  <dt>Why can a message type score 100% and still list findings?</dt>
+  <dd>Because those findings are notes. A note marks something unusual but not wrong, such as a value outside what the
+    reference apps happened to send recently, so it is shown and never counted.</dd>
+  <dt>Why isn't "outside the reference range" an error?</dt>
+  <dd>The reference range is the lowest and highest value in the big four's recent messages, a sample rather than a
+    limit. A body heavier or hotter than anything in that sample is usually just a rare body. Only a gap the size of a
+    units mistake (over 100 times the reference spread, the wrong sign, or a percentage where the reference apps send a
+    fraction) counts. Whether a value is actually <em>right</em> is what Pairing checks.</dd>
+  <dt>Is pairing compared with a single trusted message?</dt>
+  <dd>No. Each place has one agreed reference record, built from all the big four's reports of it; details they
+    disagree about are left out. Each of the app's messages is compared with that record on its own.</dd>
+  <dt>Why do six messages show up as eleven notes?</dt>
+  <dd>The Values table counts per field. A single unusual body can be outside the range in mass, radius and gravity at
+    once, and so appears in three rows.</dd>
+  <dt>An app sends a kind of message the reference apps don't. What then?</dt>
+  <dd>It is marked "unrecognised": checked against the general rules only, since there is nothing to compare it
+    with, and left out of the overall grade.</dd>
+</dl>
+
+<h2>Limits</h2>
+<ul>
+  <li>Anyone can send messages under any application name; scores describe what arrived under that name.</li>
+  <li>EDDN's uploader IDs change every few minutes, so nothing here can count users.</li>
+  <li>Scores are evidence for a closer look, not a verdict: read the findings.</li>
+</ul>
+</div>
+{% endblock %}

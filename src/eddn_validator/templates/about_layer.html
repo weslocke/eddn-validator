@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% set titles = {"rules": "Rules", "fields": "Fields", "values": "Values", "pairing": "Pairing", "behaviour": "Behaviour"} %}
+{% block title %}{{ titles[layer] }} · How scoring works · EDDN Validator{% endblock %}
+{% block style %}
+  .prose { max-width: 780px; }
+  .prose p { margin: 8px 0 0; }
+  .crumbs { font-size: .9rem; margin-bottom: 10px; }
+  .crumbs a, .crumbs strong { margin-right: 10px; }
+  .prose h2 { margin-top: 26px; }
+  .vs { margin: 10px 0 0; padding: 9px 13px; background: var(--panel); border: 1px solid var(--line);
+        border-radius: 8px; }
+  .how { margin: 8px 0 0; padding: 9px 13px; border-left: 3px solid var(--line); }
+  .how p { margin: 4px 0 0; }
+  ul.items { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+  ul.items li { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 12px; align-items: baseline;
+                padding: 7px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+  ul.items.plain li { grid-template-columns: minmax(0, 1fr); }
+  ul.items code { font-size: .75rem; }
+  .tag { font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em;
+         padding: 3px 0; border-radius: 4px; text-align: center; border: 1px solid var(--line); }
+  .tag.error { border-color: var(--critical); }
+  .tag.warning { border-color: var(--warning); }
+  .tag.info { color: var(--muted); }
+  .cols { columns: 2 260px; column-gap: 24px; padding-left: 18px; margin: 10px 0 0; }
+  .cols li { break-inside: avoid; padding: 2px 0; }
+  @media (max-width: 480px) { ul.items li { grid-template-columns: 1fr; gap: 4px; } .tag { justify-self: start; padding: 3px 8px; } }
+{% endblock %}
+{% block content %}
+<div class="prose">
+<div class="crumbs"><a href="/about">How scoring works</a>
+  {% for l in ("rules", "fields", "values", "pairing", "behaviour") %}{% if l == layer %}<strong>{{ titles[l] }}</strong>{% else %}<a href="/about/{{ l }}">{{ titles[l] }}</a>{% endif %} {% endfor %}</div>
+
+{% if layer == "rules" %}
+<h1>Rules: following EDDN's written rules</h1>
+<p class="sub">{{ weight }}% of each event type's score.</p>
+<p class="vs"><strong>Compared with:</strong> EDDN's documentation, each message checked on its own.</p>
+<div class="how"><strong>How this layer is scored</strong>
+<p>It goes by the share of messages that break each rule, not by whether a rule is broken at all. Each rule takes off
+its share of messages, in full for a serious rule and half for a minor one; notes take off nothing. Rules add up, and
+the layer stops at 0.</p>
+<p class="sub">Example: 10% of an app's FSDJump messages leave out the game version (a serious rule). Its Rules score
+for FSDJump is 90, which costs that event type {{ (weight * 0.1) | round(1) }} points ({{ weight }}% × 10). If every
+message left it out, Rules would be 0 and the event type would lose all {{ weight }} points of this layer.</p></div>
+<p>EDDN publishes rules for how apps must prepare data before sending it. EDDN's own gateway only
+checks the basic layout of a message, so most of these rules are never enforced. The validator checks
+each message against them, one message at a time.</p>
+<p>A <strong>Serious</strong> rule counts fully against the score, a <strong>Minor</strong> one counts half,
+and a <strong>Note</strong> is shown on the scorecard but never counted. Each finding on a scorecard also
+shows how often the established apps break the same rule, for fairness.</p>
+<p>The {{ total }} rules checked:</p>
+{% for g in groups %}
+<h2>{{ g.title }}</h2>
+<ul class="items">
+  {% for r in g.rules %}
+  {% set link = r.source | source_link %}
+  <li><span class="tag {{ r.severity }}" title="{{ r.effect }}">{{ r.label }}</span><span>{{ r.text }}
+    {% if link %}<a href="{{ link.url }}" target="_blank" rel="noopener noreferrer" data-tip="{{ link.tip }}"><code>{{ r.id }}</code></a>{% else %}<code class="muted" data-tip="{{ r.source }}">{{ r.id }}</code>{% endif %}</span></li>
+  {% endfor %}
+</ul>
+{% endfor %}
+{% if unlisted %}<p class="muted">Also checked: {{ unlisted | join(", ") }}.</p>{% endif %}
+<h2>Switched off</h2>
+<ul class="items plain">
+  {% for id, why in switched_off | dictsort %}<li><span>{{ why }} <code class="muted">{{ id }}</code></span></li>{% endfor %}
+</ul>
+
+{% elif layer == "fields" %}
+<h1>Fields: is the expected information there?</h1>
+<p class="sub">{{ weight }}% of each event type's score.</p>
+<p class="vs"><strong>Compared with:</strong> how often the reference apps include each field in this kind of
+message: their overall habits, not specific messages.</p>
+<div class="how"><strong>How this layer is scored</strong>
+<p>For each field every reference app always sends, the share of the app's messages missing it is averaged across those
+fields and taken off. In journal messages, a field no reference app sends takes off half the share of messages that
+carry it. Fields sent at a different rate are notes and take off nothing.</p>
+<p class="sub">Example: a kind of message has 10 expected fields, and the app leaves one of them out of every message.
+Its Fields score is 90, which costs that event type {{ (weight * 0.1) | round(1) }} points ({{ weight }}% × 10).</p></div>
+<p>Each message is a set of named pieces of information ("fields"): a star's type, a station's name, a
+system's position, and so on. This layer compares which fields an app includes with what the four
+established apps include for the same kind of message.</p>
+<h2>What is checked</h2>
+<ul class="items">
+  <li><span class="tag warning">Scored</span><span><strong>Expected fields.</strong> A field is "expected" when every established app that sends this kind of message includes it in at least {{ expected }}% of them. Each expected field this app leaves out lowers the score in proportion to how often it is missing.</span></li>
+  <li><span class="tag warning">Minor</span><span><strong>Extra fields in journal messages.</strong> Journal messages accept any field, so one that no established app ever sends is worth a closer look. In other kinds of message EDDN's format already rejects unknown fields, so extras there are only noted.</span></li>
+  <li><span class="tag info">Note</span><span><strong>Optional fields sent at a different rate.</strong> Fields some apps send and others don't, where this app's rate differs a lot from theirs. Shown for interest.</span></li>
+</ul>
+<h2>Comparing like with like</h2>
+<p>A star scan has different fields from a planet scan, so messages are compared within groups:</p>
+<ul class="items plain">
+  {% for name, what in subtypes %}<li><span><strong>{{ name }}:</strong> {{ what }}</span></li>{% endfor %}
+</ul>
+<p class="muted">A group needs at least {{ ref_min }} messages from an established app before it is used; otherwise the
+whole kind of message is used for the comparison instead, and the scorecard says so.</p>
+
+{% elif layer == "values" %}
+<h1>Values: do the contents look right?</h1>
+<p class="sub">{{ weight }}% of each event type's score.</p>
+<p class="vs"><strong>Compared with:</strong> a statistical profile of what the reference apps send in each field
+(types, known values, numeric ranges), not specific messages. The profile shifts as new reference data arrives.
+Whether a value is actually <em>right</em> for a particular body or station is checked by
+<a href="/about/pairing">Pairing</a>.</p>
+<div class="how"><strong>How this layer is scored</strong>
+<p>It goes by the share of messages with a problem: a message with a serious value finding takes off its share in
+full, one with only minor findings takes off half. Notes, such as a number a little outside the reference range, take
+off nothing. A message counts once, however many of its fields are flagged.</p>
+<p class="sub">Example: 2% of an app's Scan messages send text where every reference app sends a number. Its Values
+score for Scan is 98, which costs that event type {{ (weight * 0.02) | round(1) }} points ({{ weight }}% × 2).</p></div>
+<p>Fields can be present but hold the wrong thing. This layer looks at what is inside each field and
+compares it with what the established apps send in the same field.</p>
+<h2>What is checked</h2>
+<ul class="items">
+  <li><span class="tag error">Serious</span><span><strong>Wrong kind of value.</strong> For example text where every established app sends a number, or a number where they send yes/no.</span></li>
+  <li><span class="tag warning">Minor</span><span><strong>Unfamiliar form.</strong> A value written in a way no established app writes it, such as a translated display name where they send the game's internal name.</span></li>
+  <li><span class="tag warning">Minor</span><span><strong>Numbers wildly out of range.</strong> More than {{ far }} times the spread of what the established apps report, or the wrong sign: the kind of gap that means wrong units.</span></li>
+  <li><span class="tag info">Note</span><span><strong>New value in a familiar form.</strong> A star type or faction state the established apps haven't sent yet, written the same way theirs are. Elite has many rare but real values.</span></li>
+  <li><span class="tag info">Note</span><span><strong>Number outside the reference range.</strong> Beyond the lowest or highest value the established apps have sent recently, but short of the "wildly" line. The range is a sample, not a limit: rare but real bodies and prices land here, so it is shown and not counted.</span></li>
+  <li><span class="tag info">Note</span><span><strong>Different capital letters</strong> from the established apps.</span></li>
+</ul>
+<h2>Which fields get a list of known values</h2>
+<p>Only fields with a limited set of possible values (fewer than {{ enum_max }}, and at least {{ enum_min }} examples
+from the established apps): things like star type, planet type, economy, faction state or ship name.
+Every value the established apps have sent over the last six months counts as known.</p>
+<h2>Never checked this way</h2>
+<p>These are open-ended, so any value is allowed:</p>
+<ul class="cols">{% for n in never %}<li>{{ n }}</li>{% endfor %}</ul>
+
+{% elif layer == "pairing" %}
+<h1>Pairing: same place, same answer</h1>
+<p class="sub">{{ weight }}% of each event type's score.</p>
+<p class="vs"><strong>Compared with:</strong> the reference record for the same system, body or station, one message
+at a time. Each place has one agreed record, built from all the reference apps' reports of it; details they disagree
+about are left out. Six reports about the same body are six comparisons.</p>
+<div class="how"><strong>How this layer is scored</strong>
+<p>It goes by the share of paired messages that disagree with the reference record on at least one detail. Market
+comparisons count half, since prices can move between two players' visits. Messages about places no reference app has
+reported are not paired and do not affect the score.</p>
+<p class="sub">Example: 200 of an app's FSDJump messages could be paired, and 10 of them give a system position that
+differs from the reference record. Its Pairing score for FSDJump is 95, which costs that event type
+{{ (weight * 0.05) | round(1) }} points ({{ weight }}% × 5).</p></div>
+<p>Many players visit the same places. When an established app has reported the same star system,
+planet, station or market, the app's report is compared with theirs directly. This catches data put
+in the wrong place (for example using the previous system after a jump), rounded or damaged numbers,
+and mixed-up names.</p>
+<p>Only details that do not change are compared, so reports from different days still match. Where the
+established apps disagree among themselves about a detail, that detail is not used.</p>
+<h2>What is compared</h2>
+<ul class="items">
+  <li><span class="tag warning">Scored</span><span><strong>Star systems:</strong> the system's name and its position in the galaxy, for the same system ID.</span></li>
+  <li><span class="tag warning">Scored</span><span><strong>Route plans:</strong> the name and position of every system along a planned route.</span></li>
+  <li><span class="tag warning">Scored</span><span><strong>Planets, moons and stars:</strong> the body's name and its fixed details (listed below).</span></li>
+  <li><span class="tag warning">Scored</span><span><strong>Stations:</strong> the station's name and type (if the established apps saw it within the last week), and which star system it is in. Fleet carriers, megaships and rescue ships move between systems, so their system is not compared. Temporary mission stations are skipped.</span></li>
+  <li><span class="tag warning">Counts half</span><span><strong>Markets:</strong> the goods on sale and their buy and sell prices, when an established app reported the same market within five minutes. Counts half, because prices can change between two players' visits.</span></li>
+</ul>
+<h2>Fixed details compared for planets, moons and stars</h2>
+<ul class="cols">{% for f in body_fields %}<li>{{ f }}</li>{% endfor %}</ul>
+<h2>Not compared, because they change</h2>
+<ul class="items plain">{% for what, why in body_not %}<li><span><strong>{{ what }}</strong>: {{ why }}.</span></li>{% endfor %}</ul>
+<h2>Checks that need no other app</h2>
+<p>Two location checks work even where no established app has been: a star system's ID encodes where it is
+in the galaxy and, for generated names, the name too. Those are listed with the <a href="/about/rules">rules</a>.</p>
+
+{% elif layer == "behaviour" %}
+<h1>Behaviour: how the app sends</h1>
+<p class="sub">{{ weight }}% of each event type's score.</p>
+<p class="vs"><strong>Compared with:</strong> the reference apps' own rates for the same kind of message. Only the
+amount above them counts.</p>
+<div class="how"><strong>How this layer is scored</strong>
+<p>For each measure (duplicates, late messages, future timestamps, bursts), the app's rate minus the highest reference
+app's rate is taken off, if it is higher. The excesses add up, and the layer stops at 0.</p>
+<p class="sub">Example: 6% of an app's Docked messages are duplicates, and the reference apps' highest rate is 2%. The
+excess is 4 points, so its Behaviour score for Docked is 96, which costs that event type
+{{ (weight * 0.04) | round(1) }} points ({{ weight }}% × 4).</p></div>
+<p>This layer looks at sending habits rather than content. Some of these happen with every app now and
+then, so only the amount <strong>above</strong> what the established apps themselves do, for the same kind of
+message, counts against the score.</p>
+<h2>What is measured</h2>
+<ul class="items">
+  <li><span class="tag warning">Scored</span><span><strong>Duplicates:</strong> the identical message sent again.</span></li>
+  <li><span class="tag warning">Scored</span><span><strong>Late data:</strong> messages that reach EDDN more than {{ stale }} minutes after the event happened. Late data can be stale (a market's prices have moved on).</span></li>
+  <li><span class="tag warning">Scored</span><span><strong>Times in the future:</strong> a message stamped more than {{ future }} minutes after EDDN received it, usually local time mislabelled as universal time.</span></li>
+  <li><span class="tag warning">Scored</span><span><strong>Bursts:</strong> {{ burst }} or more messages of one kind in a single second, usually an app replaying old game files all at once.</span></li>
+  <li><span class="tag info">Note</span><span><strong>Re-sending too soon:</strong> the same message sent again 25 to 150 seconds later. EDDN asks apps to wait at least a minute before retrying.</span></li>
+</ul>
+<h2>The comparison</h2>
+<p>For each kind of message, the highest rate among the established apps is the allowance. {{ excluded }} is left
+out of that allowance, because it deliberately re-sends old game files when it starts, which would make the
+allowance too generous.</p>
+{% endif %}
+</div>
+{% endblock %}

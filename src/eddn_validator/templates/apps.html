@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}All applications · EDDN Validator{% endblock %}
+{% block style %}
+  .apps { list-style: none; padding: 0; margin: 0; columns: 3 220px; column-gap: 28px; }
+  .apps li { break-inside: avoid; padding: 5px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+  .apps .meta { display: block; color: var(--muted); font-size: .8rem; }
+  .apps .row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .apps .ver { color: var(--text-2); font-size: .85rem; font-variant-numeric: tabular-nums; }
+  .apps .grade-cell { white-space: nowrap; font-variant-numeric: tabular-nums; font-size: .88rem; }
+  .letter { break-after: avoid; font-weight: 700; color: var(--text-2); padding-top: 10px; border-bottom: 0; }
+{% endblock %}
+{% block content %}
+<h1>All applications</h1>
+<p class="sub">Every application seen on EDDN in the data held ({{ apps | length }}), A–Z, with the newest version that sent enough messages to be graded, and its grade and score. Each name opens
+that scorecard.</p>
+<div class="panel">
+  <ul class="apps">
+  {% set ns = namespace(letter="") %}
+  {% for a in apps %}
+    {% set first = (a.name[:1] or "#") | upper %}
+    {% if first != ns.letter %}{% set ns.letter = first %}<li class="letter">{{ first }}</li>{% endif %}
+    <li>
+      <span class="row">
+        <span>{% if a.version is not none %}<a href="/card/{{ a.id }}?v={{ a.version | urlencode }}">{{ a.name or "(no name)" }}</a>
+        {% else %}{{ a.name or "(no name)" }}{% endif %}
+        {% if a.version is not none %}<span class="ver">{{ a.version }}</span>{% elif a.current is not none %}<span class="ver">{{ a.current }}</span>{% endif %}
+        {% if a.ref %}<span class="chip">reference</span>{% endif %}</span>
+        {% if a.version is not none %}
+        <span class="grade-cell" tabindex="0" data-tip="{% if a.grade %}Grade {{ a.grade }}, score {{ a.score | round(1) }} out of 100, for version {{ a.version }}.{% else %}Version {{ a.version }} sent too few messages to be graded.{% endif %}">
+          {% if a.grade %}<span class="status {{ grade_status(a.grade) }}">{{ a.grade }} · {{ "%.1f" | format(a.score) }}</span>{% else %}<span class="muted">not graded</span>{% endif %}</span>
+        {% endif %}
+      </span>
+      <span class="meta">last seen {{ a.last_seen | when }}{% if a.version is not none %}{% if a.version != a.current and a.current_on_file %} · newest {{ a.current }} not graded yet{% endif %}{% elif a.recent %} · scorecard pending (within the hour){% else %} · no scorecard (no messages left on file){% endif %}</span>
+    </li>
+  {% endfor %}
+  </ul>
+</div>
+{% endblock %}

@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Outrider Usage</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #5f6b7d;
+    --line: #dde2ea; --accent: #c2410c; --mine: #2563eb; --others: #c2410c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --panel: #1a1f27; --text: #e6e9ef; --muted: #98a2b3;
+      --line: #2b323d; --accent: #fb923c; --mine: #60a5fa; --others: #fb923c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin-bottom: 20px; }
+  h1 { font-size: 1.5rem; margin: 0; }
+  h2 { font-size: 1.05rem; margin: 0 0 12px; }
+  .muted { color: var(--muted); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .tile, section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .tile .label { color: var(--muted); font-size: .85rem; }
+  .tile .value { font-size: 1.6rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+  section { margin-bottom: 20px; overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: .85rem; }
+  td.num, th.num { text-align: right; }
+  tr:last-child td { border-bottom: 0; }
+  .bar { display: inline-block; height: 10px; border-radius: 2px; vertical-align: middle; }
+  .bar.others { background: var(--others); }
+  .bar.mine { background: var(--mine); }
+  .legend span { margin-right: 14px; }
+  .chip { display: inline-block; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line);
+          font-size: .78rem; color: var(--muted); }
+  nav a { color: var(--accent); margin-left: 8px; }
+  .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 20px; }
+  .two section { margin-bottom: 0; }
+  @media (max-width: 480px) { .two { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>{{ name }} usage on EDDN</h1>
+  {% if not empty %}<span class="muted">as of {{ now | local("%Y-%m-%d %H:%M %Z") }} · private page</span>{% endif %}
+</header>
+
+{% if empty %}
+<section><p>No {{ name }} messages have been stored yet.</p></section>
+{% else %}
+
+<div class="tiles">
+  <div class="tile"><div class="label">All-time messages</div><div class="value">{{ "{:,}".format(totals.total) }}</div></div>
+  <div class="tile"><div class="label">Mine</div><div class="value">{{ "{:,}".format(totals.mine) }}</div></div>
+  <div class="tile"><div class="label">Other players</div><div class="value">{{ "{:,}".format(totals.others) }}</div></div>
+  {% if totals.unknown %}<div class="tile"><div class="label">Unknown sender</div><div class="value">{{ "{:,}".format(totals.unknown) }}</div></div>{% endif %}
+  <div class="tile"><div class="label">Other players today</div><div class="value">{{ "{:,}".format(today_messages) }}</div></div>
+  <div class="tile"><div class="label">Commanders today (est.)</div><div class="value">{{ today_groups | length }}</div></div>
+</div>
+
+<section>
+  <h2>Today's other players <span class="muted">· estimated by where they fly</span></h2>
+  {% if today_groups %}
+  <table>
+    <tr><th>Near</th><th class="num">Messages</th><th>Last seen</th></tr>
+    {% for g in today_groups %}
+    <tr><td>{{ g.where or "?" }}</td><td class="num">{{ "{:,}".format(g.messages) }}</td><td>{{ g.last | local("%H:%M") }}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">No other players' messages with a position yet today.</p>{% endif %}
+</section>
+
+<section>
+  {% set peak = (daily | map(attribute="others") | max) or 1 %}
+  <h2>Per day <span class="muted">· New York days</span>
+    <nav style="display:inline">{% for d in (7, 14, 30, 60, 90) %}{% if d == days %}<span class="chip">{{ d }} days</span>{% else %}<a href="?days={{ d }}">{{ d }}</a>{% endif %}{% endfor %}</nav>
+  </h2>
+  <p class="legend muted"><span><span class="bar others" style="width:10px"></span> other players</span><span><span class="bar mine" style="width:10px"></span> mine</span></p>
+  <table>
+    <tr><th>Day</th><th class="num">Commanders (est.)</th><th class="num">Other players</th><th class="num">Mine</th><th></th></tr>
+    {% for d in daily %}
+    <tr>
+      <td>{{ d.day.strftime("%a %Y-%m-%d") }}</td>
+      <td class="num">{{ d.commanders }}</td>
+      <td class="num">{{ "{:,}".format(d.others) }}</td>
+      <td class="num">{{ "{:,}".format(d.mine) }}</td>
+      <td style="width:40%"><span class="bar others" style="width:{{ (100 * d.others / peak) | round(1) }}%"></span></td>
+    </tr>
+    {% endfor %}
+  </table>
+</section>
+
+<div class="two">
+<section>
+  <h2>Versions <span class="muted">· last 30 days</span></h2>
+  <table>
+    <tr><th>Version</th><th class="num">Others</th><th class="num">Mine</th><th>First seen</th><th>Last seen</th></tr>
+    {% for v in versions %}
+    <tr><td>{{ v.version }}</td><td class="num">{{ "{:,}".format(v.others) }}</td><td class="num">{{ "{:,}".format(v.mine) }}</td>
+        <td>{{ v.first | local("%m-%d %H:%M") }}</td><td>{{ v.last | local("%m-%d %H:%M") }}</td></tr>
+    {% endfor %}
+  </table>
+</section>
+
+<section>
+  <h2>Event types <span class="muted">· last 30 days</span></h2>
+  <table>
+    <tr><th>Event type</th><th class="num">Others</th><th class="num">Mine</th><th>Last</th></tr>
+    {% for e in event_types %}
+    <tr><td>{{ e.event_type }}{% if e.is_test %} <span class="chip">test</span>{% endif %}</td>
+        <td class="num">{{ "{:,}".format(e.others) }}</td><td class="num">{{ "{:,}".format(e.mine) }}</td>
+        <td>{{ e.last | local("%m-%d %H:%M") }}</td></tr>
+    {% endfor %}
+  </table>
+</section>
+</div>
+
+<p class="muted" style="margin-top:20px">First Outrider message seen {{ totals.first | local }} · last other-player message {{ totals.last_other | local }}.
+Commander counts are estimates: positions within {{ 300 }} ly, or {{ 800 }} ly within 10 minutes, or sharing EDDN's short-lived uploader hash, count as one commander.</p>
+{% endif %}
+</main>
+</body>
+</html>

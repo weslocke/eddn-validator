@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}EDDN Validator{% endblock %}
+{% block style %}
+  .search { width: 100%; max-width: 520px; font: inherit; padding: 10px 12px; border-radius: 8px;
+            border: 1px solid var(--line); background: var(--panel); color: var(--text); }
+  .search:focus { outline: 2px solid var(--link); outline-offset: 1px; }
+  #matches { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  #matches button { font: inherit; padding: 6px 12px; border-radius: 999px; cursor: pointer;
+                    border: 1px solid var(--line); background: var(--panel); color: var(--text); }
+  #matches button[aria-pressed="true"] { border-color: var(--link); outline: 1px solid var(--link); }
+  #matches button .chip { margin-left: 6px; }
+  #versions table td a { text-decoration: none; }
+  .ver { color: var(--text-2); font-variant-numeric: tabular-nums; }
+{% endblock %}
+{% block content %}
+<h1>EDDN application scorecards</h1>
+<p class="sub">How closely does an application's EDDN data match what the established senders
+send? Pick an application, then a version.</p>
+
+<div class="panel">
+  <label for="q"><strong>Application</strong> <span class="muted">(type at least 2 letters)</span></label><br>
+  <input id="q" class="search" type="search" autocomplete="off" spellcheck="false" maxlength="40"
+         placeholder="e.g. EDDI, Warboard, Market Connector">
+  <ul id="matches" aria-live="polite"></ul>
+  <noscript><p>The application picker needs JavaScript.</p></noscript>
+</div>
+
+<div id="versions" class="panel" hidden>
+  <h2 id="app-name"></h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Version</th><th>Last seen</th><th>Grade</th><th class="num">Score</th><th class="num">Messages</th></tr></thead>
+    <tbody id="version-rows"></tbody>
+  </table></div>
+  <p class="muted">Each version links to its scorecard, which covers all of its messages on file.</p>
+</div>
+
+<div class="panel">
+  <h2>New applications <span class="muted">· first seen on EDDN in the last {{ new_days }} days, A–Z</span></h2>
+  {% if new.data_since %}
+  <p class="sub">First message on or after {{ new.since | day }}, not counting applications already sending when the
+  records begin. <a href="/apps">All applications</a>
+  <span class="muted">(Oldest records in database: {{ new.data_since | day }})</span></p>
+  {% endif %}
+  {% if new.apps %}
+  <div class="scroll"><table>
+    <thead><tr><th>Application</th><th>First seen</th><th>Last seen</th><th class="num">Versions</th>
+      <th class="num">Messages</th><th>Grade</th></tr></thead>
+    <tbody>
+    {% for a in new.apps %}
+    <tr>
+      <td>{{ a.name or "(no name)" }} <span class="ver">{{ a.latest }}</span>{% if a.newest != a.latest %}
+        <br><span class="muted">newest {{ a.newest }} not graded yet</span>{% endif %}</td>
+      <td>{{ a.first_seen | when }}</td>
+      <td>{{ a.last_seen | when }}</td>
+      <td class="num">{{ a.versions }}</td>
+      <td class="num">{{ "{:,}".format(a.messages) }}</td>
+      <td>{% if a.has_card %}<a href="/card/{{ a.id }}?v={{ a.latest | urlencode }}"><span class="status {{ grade_status(a.grade) }}">{{ a.grade or "not graded (too few messages)" }}{% if a.score is not none %} · {{ "%.1f" | format(a.score) }}{% endif %}</span></a>
+          {% else %}<span class="muted">scorecard pending (within the hour)</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+  <p class="muted">No new applications in the last {{ new_days }} days.</p>
+  {% endif %}
+</div>
+
+<script type="application/json" id="apps-data">{{ apps | tojson }}</script>
+{% endblock %}
+{% block script %}
+<script nonce="{{ nonce }}">
+(function () {
+  const apps = JSON.parse(document.getElementById("apps-data").textContent);
+  const q = document.getElementById("q");
+  const list = document.getElementById("matches");
+  const panel = document.getElementById("versions");
+  const rows = document.getElementById("version-rows");
+  const status = {A: "good", B: "warning", C: "warning", D: "serious", F: "critical"};
+  let selected = null;
+
+  function el(tag, text, cls) {
+    const e = document.createElement(tag);
+    if (text !== undefined) e.textContent = text;
+    if (cls) e.className = cls;
+    return e;
+  }
+
+  function showApp(app) {
+    selected = app.id;
+    for (const b of list.querySelectorAll("button")) b.setAttribute("aria-pressed", b.dataset.id == app.id);
+    document.getElementById("app-name").textContent = app.name + (app.ref ? " (reference app)" : "");
+    rows.replaceChildren();
+    for (const v of app.versions) {
+      const tr = el("tr");
+      const link = el("td"), a = el("a", v.v);
+      a.href = "/card/" + app.id + "?v=" + encodeURIComponent(v.v);
+      link.append(a);
+      const grade = el("td");
+      grade.append(el("span", v.g || "not graded", "status " + (status[v.g] || "none")));
+      tr.append(link, el("td", new Date(v.last).toLocaleDateString()), grade,
+                el("td", v.s == null ? "–" : v.s.toFixed(1), "num"),
+                el("td", v.n.toLocaleString(), "num"));
+      rows.append(tr);
+    }
+    panel.hidden = false;
+  }
+
+  function search() {
+    const text = q.value.trim().toLowerCase();
+    list.replaceChildren();
+    if (text.length < 2) { return; }
+    const found = apps.filter(a => a.name.toLowerCase().includes(text)).slice(0, 30);
+    if (!found.length) { list.append(el("li", "No application matches.", "muted")); return; }
+    for (const app of found) {
+      const b = el("button", app.name);
+      b.type = "button";
+      b.dataset.id = app.id;
+      b.setAttribute("aria-pressed", app.id === selected);
+      if (app.ref) b.append(el("span", "reference", "chip"));
+      b.addEventListener("click", () => showApp(app));
+      const li = el("li"); li.append(b); list.append(li);
+    }
+    if (found.length === 1) showApp(found[0]);
+  }
+  q.addEventListener("input", search);
+})();
+</script>
+{% endblock %}

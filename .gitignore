@@ -1,0 +1,42 @@
+# Working research notes (not for publication)
+docs/research/
+
+# Credentials and local settings
+.env
+.env.*
+!.env.example
+docker-compose.override.yml
+*.local.yml
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Data files: database exports, the earlier listener's SQLite file, logs
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.log
+
+# Editors and operating systems
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Claude Code's per-user local settings
+.claude/settings.local.json

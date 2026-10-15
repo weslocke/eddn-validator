@@ -1,0 +1,74 @@
+# Scoring settings (docs/DESIGN.md §6.7, §6.8).
+
+# Layer weights. A layer with no data for an event type drops out and the
+# others are rescaled. Pairing raised from the design's 10 to 20 (2026-10-13):
+# on real traffic it is the strongest signal (wrong systems, rounded body
+# data), and it is what consumers like Inara care about most.
+weights:
+  rules: 30        # documented EDDN rules (config/rules.yaml)
+  structure: 20    # fields every reference app sends
+  values: 20       # types, known values, ranges vs reference apps
+  pairing: 20      # same system/body/station/market vs reference apps
+  behaviour: 10    # duplicates, late, future-dated, bursts vs reference baseline
+
+severity_weights:
+  error: 1.0
+  warning: 0.5
+  info: 0.0
+
+# A field is "expected" when every reference app with enough data sends it in
+# at least this share of messages; "common" when at least one sends it this often.
+expected_threshold: 0.95
+common_threshold: 0.5
+reference_min_messages: 50
+
+# Newest messages scored per event type (counts and behaviour use everything).
+sample_per_event_type: 5000
+
+confidence:
+  insufficient_below: 5    # fewer messages: shown, not scored
+  low_below: 30            # fewer messages: scored, half weight in the grade
+
+values:
+  enum_max_distinct: 200   # more distinct reference values: not treated as a fixed set
+  enum_min_samples: 500    # reference values needed before a set is trusted
+  # A value outside the reference set is a warning only when its form is new
+  # (shape: $symbol;, CamelCase, lower case words, ...); a new member of a known
+  # form (a rare star type, a new faction state) is noted as info.
+  numeric_min_samples: 100
+  numeric_margin: 0.10     # beyond the reference min/max by this share of the span: info
+  # Physical and economic values have long tails (30M credit commodities, huge
+  # orbits); only a units-scale or sign error (beyond 100 spans) is warned about.
+  numeric_margin_warning: 100.0
+  # Open-ended fields (names, times, identifiers): never checked against a value
+  # set or a numeric range. Regular expressions over the normalised path.
+  open_fields:
+    - '(^|\.|\[\]\.)timestamp$'
+    - '(^|\.|\[\]\.)(StarSystem|System|SystemName|systemName|Body|BodyName|StationName|stationName)$'
+    - '(^|\.|\[\]\.)(CarrierName|CarrierID|SignalName|SpawningFaction|NearestDestination|Name)$'
+    - '(^|\.|\[\]\.)(SystemAddress|MarketID|marketId|BodyID|EntryID|id)$'
+    - '^Route\[\]\.(StarSystem|SystemAddress)$'
+    - '^Factions\[\]\.Name$'
+    - 'Faction\.Name$'
+    - '^Parents\[\]\.'      # body IDs of parent bodies
+
+
+# Left out of behaviour baselines (re-sends old journals on start-up by design).
+behaviour_baseline_exclude: [EDOMH]
+duplicate_window_hours: 24   # a repeat of an identical message within this long is a duplicate
+stale_after_minutes: 60
+future_after_minutes: 5
+burst_per_second: 20
+
+grades:
+  A: 90
+  B: 80
+  C: 70
+  D: 60
+
+# How often cards are recomputed: when the app version has new messages, and
+# at least this often regardless (ranges move on even without new data).
+refresh_hours: 6
+# ...but not more often than this, so busy app versions don't keep the worker
+# scoring non-stop.
+min_recompute_minutes: 60

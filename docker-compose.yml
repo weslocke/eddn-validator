@@ -1,0 +1,95 @@
+# EDDN Validator stack. Deploy from the dev machine with:
+#   docker --context <your-docker-host> compose up -d --build
+# Values come from .env on the machine running the command.
+
+name: eddn-validator
+
+x-app: &app
+  build: .
+  image: eddn-validator:latest
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-db-env: &db-env
+  PGHOST: ${PGHOST:?set PGHOST in .env}
+  PGPORT: ${PGPORT:-5432}
+  PGDATABASE: ${PGDATABASE:-eddn_validator}
+  EDDN_APP_PASSWORD: ${EDDN_APP_PASSWORD:?set EDDN_APP_PASSWORD in .env}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+services:
+  # Applies migrations and creates partitions, then exits. Also runs the
+  # one-time bootstrap:  docker --context <your-docker-host> compose run --rm migrate bootstrap
+  migrate:
+    <<: *app
+    command: ["migrate"]
+    restart: "no"
+    environment:
+      <<: *db-env
+      EDDN_RO_PASSWORD: ${EDDN_RO_PASSWORD:-}
+      PG_ADMIN_USER: ${PG_ADMIN_USER:-}
+      PG_ADMIN_PASSWORD: ${PG_ADMIN_PASSWORD:-}
+      PG_ADMIN_DATABASE: ${PG_ADMIN_DATABASE:-postgres}
+
+  listener:
+    <<: *app
+    command: ["listener"]
+    restart: unless-stopped
+    stop_grace_period: 30s
+    environment:
+      <<: *db-env
+      EDDN_RELAY: ${EDDN_RELAY:-tcp://eddn.edcd.io:9500}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    <<: *app
+    command: ["worker"]
+    restart: unless-stopped
+    environment:
+      <<: *db-env
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    volumes:
+      # An empty directory on the database drive, read-only: lets the retention size
+      # guard see the drive's free space (config/retention.yaml min_free_gb).
+      # (DISK_PROBE_DIR in .env: an empty directory on the drive holding the Postgres data)
+      - ${DISK_PROBE_DIR:-/srv/eddn-validator/disk-probe}:/disk-probe:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # The owner's private ED Outrider usage page. LAN only: do not route it
+  # through the public reverse proxy.
+  outrider:
+    <<: *app
+    command: ["outrider-web", "--port", "8026"]
+    restart: unless-stopped
+    ports:
+      - "${OUTRIDER_PORT:-8026}:8026"
+    environment:
+      <<: *db-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # Public scorecard site. Read-only: it only gets the SELECT-only eddn_ro login.
+  # Put it behind the reverse proxy for internet exposure (deploy/nginx-example.conf).
+  web:
+    <<: *app
+    command: ["web", "--port", "8027"]
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8027}:8027"
+    environment:
+      PGHOST: ${PGHOST:?set PGHOST in .env}
+      PGPORT: ${PGPORT:-5432}
+      PGDATABASE: ${PGDATABASE:-eddn_validator}
+      EDDN_RO_PASSWORD: ${EDDN_RO_PASSWORD:?set EDDN_RO_PASSWORD in .env}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully

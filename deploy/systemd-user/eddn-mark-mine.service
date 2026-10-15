@@ -1,0 +1,9 @@
+[Unit]
+Description=EDDN Validator: mark ED Outrider messages sent by this PC's Outrider
+After=network-online.target
+
+[Service]
+Type=oneshot
+# %h is your home directory; change "eddn-validator" to where the project is checked out.
+WorkingDirectory=%h/eddn-validator
+ExecStart=%h/eddn-validator/.venv/bin/eddn-validator --env-file %h/eddn-validator/.env mark-mine

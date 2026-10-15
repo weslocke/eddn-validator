@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" type="image/svg+xml" href="/static/logo.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
+<link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+<title>{% block title %}EDDN Validator{% endblock %}</title>
+<style nonce="{{ nonce }}">
+  :root {
+    color-scheme: light;
+    --bg: #f3f3f1; --panel: #fcfcfb; --text: #0b0b0b; --text-2: #52514e; --muted: #77756f;
+    --line: #e3e2de; --link: #1f66c1; --code-bg: #f0efec;
+    --good: #0ca30c; --warning: #fab219; --serious: #ec835a; --critical: #d03b3b; --none: #b9b7b0;
+    --tip-bg: #23272e; --tip-fg: #f3f3f1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #121211; --panel: #1a1a19; --text: #f0efec; --text-2: #c3c2b7; --muted: #95938a;
+      --line: #2e2e2b; --link: #6ea8f0; --code-bg: #232321; --none: #57554f;
+      --tip-bg: #f0efec; --tip-fg: #121211;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #121211; --panel: #1a1a19; --text: #f0efec; --text-2: #c3c2b7; --muted: #95938a;
+    --line: #2e2e2b; --link: #6ea8f0; --code-bg: #232321; --none: #57554f;
+    --tip-bg: #f0efec; --tip-fg: #121211;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--link); }
+  main { max-width: 1400px; margin: 0 auto; padding: 20px 16px 56px; }
+  header.site { display: flex; flex-wrap: wrap; gap: 4px 18px; align-items: center;
+                padding-bottom: 14px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+  header.site .brand { display: inline-flex; align-items: center; gap: 9px; font-weight: 700; font-size: 1.05rem;
+                      color: var(--text); text-decoration: none; }
+  header.site .brand img { display: block; flex: none; }
+  header.site nav a { margin-right: 14px; font-size: .92rem; }
+  h1 { font-size: 1.55rem; margin: 0 0 4px; overflow-wrap: anywhere; }
+  h2 { font-size: 1.1rem; margin: 0 0 10px; }
+  h3 { font-size: .98rem; margin: 18px 0 8px; }
+  .muted { color: var(--muted); }
+  .sub { color: var(--text-2); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+           padding: 16px; margin-bottom: 18px; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 6px 12px; border-bottom: 1px solid var(--line); vertical-align: top;
+           white-space: nowrap; }
+  /* Only free-text cells wrap; everything else keeps one line and the table scrolls sideways
+     inside its panel on narrow screens. */
+  td.wrap, th.wrap { white-space: normal; min-width: 260px; }
+  th { color: var(--text-2); font-weight: 600; font-size: .83rem; white-space: nowrap; }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .84rem; }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+  pre { background: var(--code-bg); padding: 10px; border-radius: 6px; overflow-x: auto;
+        white-space: pre-wrap; word-break: break-all; max-height: 260px; }
+  /* Status: a coloured mark plus a text label, never colour alone. */
+  .status { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .status::before { content: ""; width: 10px; height: 10px; border-radius: 50%;
+                    background: var(--none); flex: none; }
+  .status.good::before { background: var(--good); }
+  .status.warning::before { background: var(--warning); }
+  .status.serious::before { background: var(--serious); }
+  .status.critical::before { background: var(--critical); }
+  .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line);
+          font-size: .78rem; color: var(--text-2); white-space: nowrap; }
+  .sev { display: inline-flex; align-items: center; gap: 5px; font-size: .8rem; font-weight: 600;
+         white-space: nowrap; }
+  .sev::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--none); }
+  .sev.error::before { background: var(--critical); }
+  .sev.warning::before { background: var(--warning); }
+  .sev.info::before { background: var(--none); }
+  .grade { display: inline-grid; place-items: center; width: 2.1em; height: 2.1em; border-radius: 8px;
+           font-weight: 800; border: 3px solid var(--none); }
+  .grade.good { border-color: var(--good); } .grade.warning { border-color: var(--warning); }
+  .grade.serious { border-color: var(--serious); } .grade.critical { border-color: var(--critical); }
+  footer { margin-top: 30px; color: var(--muted); font-size: .85rem; }
+  /* Hover text: any element with data-tip. Shown by a small script in a fixed box so that
+     scrolling tables cannot clip it; works on hover, keyboard focus and tap. */
+  [data-tip] { cursor: help; text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }
+  summary [data-tip], .grade[data-tip], .tile[data-tip] { text-decoration: none; }
+  a[data-tip] { cursor: pointer; text-decoration: underline; }
+  #tip { position: fixed; z-index: 50; max-width: min(360px, calc(100vw - 24px)); padding: 9px 11px;
+         border-radius: 7px; background: var(--tip-bg); color: var(--tip-fg); font-size: .82rem;
+         line-height: 1.45; white-space: pre-line; box-shadow: 0 6px 20px rgba(0,0,0,.25);
+         pointer-events: none; }
+  {% block style %}{% endblock %}
+</style>
+</head>
+<body>
+<main>
+<header class="site">
+  <a class="brand" href="/"><img src="/static/logo.svg" alt="" width="30" height="30">EDDN Validator</a>
+  <nav><a href="/">Scorecards</a><a href="/apps">All applications</a><a href="/about">How scoring works</a></nav>
+</header>
+{% block content %}{% endblock %}
+<footer>Scores compare an application's EDDN messages with those of the reference senders
+(EDMC, EDDiscovery, EDDLite, EDO Materials Helper). Read-only; data from the public EDDN relay.</footer>
+</main>
+<div id="tip" role="tooltip" hidden></div>
+<script nonce="{{ nonce }}">
+(function () {
+  const box = document.getElementById("tip");
+  let current = null;
+  function show(el) {
+    current = el;
+    box.textContent = el.getAttribute("data-tip");
+    box.hidden = false;
+    const r = el.getBoundingClientRect(), b = box.getBoundingClientRect();
+    let top = r.bottom + 8;
+    if (top + b.height > window.innerHeight - 8) top = Math.max(8, r.top - b.height - 8);
+    let left = Math.min(Math.max(8, r.left), window.innerWidth - b.width - 8);
+    box.style.top = top + "px";
+    box.style.left = left + "px";
+  }
+  function hide() { current = null; box.hidden = true; }
+  function target(e) { return e.target.closest ? e.target.closest("[data-tip]") : null; }
+  document.addEventListener("mouseover", e => { const t = target(e); if (t) show(t); });
+  document.addEventListener("mouseout", e => { const t = target(e); if (t && !t.contains(e.relatedTarget)) hide(); });
+  document.addEventListener("focusin", e => { const t = target(e); if (t) show(t); });
+  document.addEventListener("focusout", hide);
+  document.addEventListener("touchstart", e => { const t = target(e); if (t) { show(t); } else { hide(); } }, {passive: true});
+  window.addEventListener("scroll", hide, {passive: true});
+  document.addEventListener("keydown", e => { if (e.key === "Escape") hide(); });
+})();
+</script>
+{% block script %}{% endblock %}
+</body>
+</html>

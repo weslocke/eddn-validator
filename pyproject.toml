@@ -1,0 +1,36 @@
+[project]
+name = "eddn-validator"
+version = "0.1.0"
+description = "Scores EDDN sender applications against the reference senders"
+readme = "README.md"
+license = {text = "GPL-3.0-or-later"}
+classifiers = [
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "Jinja2>=3.1,<4",
+    "psycopg[binary]>=3.2,<4",
+    "pyzmq>=26,<28",
+    "PyYAML>=6,<7",
+    "uvicorn>=0.32,<1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[project.scripts]
+eddn-validator = "eddn_validator.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/eddn_validator"]
+artifacts = ["src/eddn_validator/templates/*.html", "src/eddn_validator/static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

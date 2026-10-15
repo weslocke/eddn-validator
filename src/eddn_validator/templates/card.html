@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+{% set c = card %}
+{% block title %}{{ c.app }} {{ c.version }} scorecard{% endblock %}
+{% block style %}
+  .head { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+  .head .grade { font-size: 2rem; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 16px 0 18px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+  .tile .label { color: var(--text-2); font-size: .82rem; }
+  .tile .value { font-size: 1.35rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+  details.row { border-top: 1px solid var(--line); }
+  details.row:first-of-type { border-top: 0; }
+  details.row > summary { cursor: pointer; padding: 8px 4px; list-style: none;
+                          display: grid; grid-template-columns: minmax(170px, 1.7fr) 80px 92px repeat(5, 62px) 92px;
+                          gap: 6px; align-items: center; font-variant-numeric: tabular-nums; }
+  details.row > summary::-webkit-details-marker { display: none; }
+  details.row > summary .et::before { content: "▸ "; color: var(--muted); }
+  details.row[open] > summary .et::before { content: "▾ "; }
+  .rowhead { display: grid; grid-template-columns: minmax(170px, 1.7fr) 80px 92px repeat(5, 62px) 92px;
+             gap: 6px; padding: 0 4px 6px; color: var(--text-2); font-size: .8rem; font-weight: 600; }
+  .r { text-align: right; }
+  .layer { text-align: right; }
+  .body { padding: 4px 6px 16px 18px; }
+  .rowwrap { min-width: 860px; }
+  .warnbox { border-left: 4px solid var(--warning); }
+  .kv { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+  .layers-line { margin: 2px 0 6px; }
+  .flush { margin-bottom: 0; }
+  .compares { margin: 0 0 8px; font-size: .88rem; }
+  .notscored { color: var(--muted); font-size: .78rem; font-weight: 400; }
+  tr.noted td { color: var(--muted); }
+  tr.noted td code { color: var(--muted); }
+  .rowhead a { color: inherit; }
+  .versions { max-height: 460px; overflow: auto; }
+  .versions th { position: sticky; top: 0; background: var(--panel); }
+  .versions tr.current td { background: var(--code-bg); }
+  @media (max-width: 720px) {
+    .rowwrap { min-width: 0; }
+    .rowhead, details.row > summary { grid-template-columns: minmax(0, 1fr) 64px 78px; }
+    .rowhead .wide, details.row > summary .wide { display: none; }
+    details.row > summary .et { overflow-wrap: break-word; }
+  }
+{% endblock %}
+{% block content %}
+{% set st = grade_status(c.grade) %}
+<div class="head">
+  <span class="grade {{ st }}" aria-label="grade {{ c.grade or 'not scored' }}" tabindex="0" data-tip="{{ c.tip_grade }}">{{ c.grade or "–" }}</span>
+  <div>
+    <h1>{{ c.app }} <span class="sub">{{ c.version }}</span></h1>
+    <div class="sub">
+      {% if c.is_reference %}<span class="chip">reference app: {{ c.ref_group }}</span>{% endif %}
+      <span tabindex="0" data-tip="{{ c.tip_grade }}">Score {{ c.score if c.score is not none else "not scored" }}</span> ·
+      <span tabindex="0" data-tip="{{ TIPS.window_ref if c.is_reference else TIPS.window }}">{% if c.all_messages %}all messages on file{% if c.oldest %} (since {{ c.oldest[:10] }}){% endif %}{% else %}last {{ c.range_days }} day{{ "s" if c.range_days > 1 }}{% endif %}</span> ·
+      <span tabindex="0" data-tip="{{ TIPS.computed }}">computed {{ c.computed_at | age }}</span>
+    </div>
+  </div>
+</div>
+
+{% if c.older_than_reference %}
+<p class="sub">This version's newest messages are over 30 days old. It is compared with what the reference apps
+send today, so a field the game added since may show as missing.</p>
+{% endif %}
+{% set scored = c.rows | selectattr("score", "defined") | list %}
+<div class="tiles">
+  <div class="tile" tabindex="0" data-tip="{{ TIPS.tile_messages }}"><div class="label">Messages</div><div class="value">{{ c.messages | n }}</div></div>
+  <div class="tile" tabindex="0" data-tip="{{ TIPS.tile_sent }}"><div class="label">Event types sent</div><div class="value">{{ c.rows | length }}</div></div>
+  <div class="tile" tabindex="0" data-tip="{{ TIPS.tile_scored }}"><div class="label">Event types scored</div><div class="value">{{ scored | length }}</div></div>
+  <div class="tile" tabindex="0" data-tip="{{ TIPS.tile_not_sent }}"><div class="label">Not sent (reference apps do)</div><div class="value">{{ c.not_sent | length }}</div></div>
+</div>
+
+{% if c.unrecognised %}
+<div class="panel warnbox">
+  <h2><span class="sev warning">warning</span> Schemas no reference app sends</h2>
+  <p>{% for et in c.unrecognised %}<code>{{ et }}</code> {% endfor %}</p>
+  <p class="sub">These are checked against the documented rules only, and left out of the grade.
+  They may be new EDDN schemas, or messages sent to the wrong schema.</p>
+</div>
+{% endif %}
+
+<div class="panel">
+  <h2><span tabindex="0" data-tip="{{ TIPS.gameversions }}">Game versions and schemas</span></h2>
+  {% set total = c.messages or 1 %}
+  <div class="kv">
+    {% for k, v in c.gameversions.classes | dictsort %}
+      <span tabindex="0" data-tip="{{ GV_TIPS.get(k, k) }}: {{ v | n }} of {{ c.messages | n }} messages ({{ (v / total) | pct }}).">{% if k in ("Legacy 3.x", "CAPI Legacy", "absent", "empty") %}<span class="sev warning">{{ k }}</span>{% else %}<strong>{{ k }}</strong>{% endif %}
+      {{ v | n }} ({{ (v / total) | pct }})</span>
+    {% endfor %}
+  </div>
+  <p class="sub flush">Exact values:
+    {% for k, v in c.gameversions["values"] | dictsort(by="value", reverse=true) %}<code>{{ k }}</code> {{ v | n }}{% if not loop.last %}, {% endif %}{% endfor %}.
+    <span tabindex="0" data-tip="{{ TIPS.schemas }}">Schemas</span>: {% for k, v in c.schemas | dictsort %}{{ k }} {{ v | n }}{% if not loop.last %}, {% endif %}{% endfor %}.
+    Services that consume EDDN often filter on <code>gameversion</code>; Legacy, missing or empty values are flagged.</p>
+</div>
+
+<div class="panel scroll">
+  <h2>Event types</h2>
+  <div class="rowwrap">
+  <div class="rowhead"><span>Event type</span><span class="r">Messages</span><span class="r" tabindex="0" data-tip="{{ TIPS.col_score }}">Score</span>
+    <a class="r wide" href="/about/rules" data-tip="{{ TIPS.col_rules }}">Rules</a><a class="r wide" href="/about/fields" data-tip="{{ TIPS.col_structure }}">Fields</a><a class="r wide" href="/about/values" data-tip="{{ TIPS.col_values }}">Values</a><a class="r wide" href="/about/pairing" data-tip="{{ TIPS.col_pairing }}">Pairing</a><a class="r wide" href="/about/behaviour" data-tip="{{ TIPS.col_behaviour }}">Behaviour</a><span class="r wide" tabindex="0" data-tip="{{ TIPS.col_confidence }}">Confidence</span></div>
+  {% for r in c.rows %}
+  <details class="row">
+    <summary>
+      <span class="et">{{ r.event_type | breakable }}{% if r.branch == "legacy" %} <span class="chip">Legacy</span>{% endif %}{% if not r.recognised %} <span class="sev warning">unrecognised</span>{% endif %}</span>
+      <span class="r">{{ r.messages | n }}</span>
+      <span class="r" data-tip="{{ r.tips.score }}">{% if r.score is defined %}<span class="status {{ score_status(r.score) }}">{{ r.score }}</span>{% else %}<span class="muted">–</span>{% endif %}</span>
+      {% for k in ("rules", "structure", "values", "pairing", "behaviour") %}
+        {% set v = r.layers.get(k) %}
+        <span class="layer wide" data-tip="{{ r.tips[k] }}">{% if v is not none %}{{ v | round | int }}{% else %}<span class="muted">–</span>{% endif %}</span>
+      {% endfor %}
+      <span class="r wide" data-tip="{{ r.tips.confidence }}">{% if r.confidence == "ok" %}ok{% elif r.confidence == "low" %}<span class="sev warning">low</span>{% else %}<span class="muted">too few</span>{% endif %}</span>
+    </summary>
+    <div class="body">
+      <p class="layers-line sub">Layers:
+        {% for k, label in (("rules", "rules"), ("structure", "fields"), ("values", "values"), ("pairing", "pairing"), ("behaviour", "behaviour")) %}
+          {% set v = r.layers.get(k) %}<span tabindex="0" data-tip="{{ r.tips[k] }}">{{ label }} {% if v is not none %}{{ v | round | int }}{% else %}–{% endif %}</span>{% if not loop.last %} · {% endif %}
+        {% endfor %} · <span tabindex="0" data-tip="{{ r.tips.confidence }}">confidence</span> {{ {"ok": "ok", "low": "low (5–29 messages)", "insufficient": "too few to score"}[r.confidence] }}</p>
+      {% if r.confidence == "insufficient" %}<p class="muted">Fewer than 5 messages: shown, not scored.</p>{% endif %}
+
+      {% if r.rules %}
+      <h3>Documented EDDN rules</h3>
+      <p class="compares sub">Each message checked on its own against EDDN's written rules. Serious findings count
+      fully, minor ones half; notes are shown only. <a href="/about/rules">All rules</a></p>
+      <div class="scroll"><table>
+        <tr><th class="wrap"><span tabindex="0" data-tip="{{ TIPS.rule }}">Rule</span></th><th><span tabindex="0" data-tip="{{ TIPS.severity }}">Severity</span></th><th class="num"><span tabindex="0" data-tip="{{ TIPS.rule_messages }}">Messages</span></th><th class="wrap"><span tabindex="0" data-tip="{{ TIPS.rule_detail }}">What failed (first case)</span></th><th><span tabindex="0" data-tip="{{ TIPS.rule_reference }}">Reference apps</span></th></tr>
+        {% for rule in r.rules %}
+        <tr{% if rule.severity == "info" %} class="noted"{% endif %}>
+          <td class="wrap"><code>{{ rule.id }}</code><br><span class="sub">{{ rule.title }}</span><br><span class="muted">{{ rule.source | source_links }}</span></td>
+          <td><span class="sev {{ rule.severity }}" tabindex="0" data-tip="{{ SEV_TIPS[rule.severity] }}">{{ {"error": "serious", "warning": "minor", "info": "note"}.get(rule.severity, rule.severity) }}</span>{% if rule.severity == "info" %}<br><span class="notscored">not scored</span>{% endif %}</td>
+          <td class="num"><span tabindex="0" data-tip="{{ rule.count | n }} of the messages checked broke {{ rule.id }} ({{ rule.rate | pct }}).">{{ rule.count | n }}</span><br><span class="muted">{{ rule.rate | pct }}</span></td>
+          <td class="wrap">{{ rule.detail }}
+            {% for ex in rule.examples %}<details><summary class="muted">example {{ loop.index }}</summary><pre>{{ ex }}</pre></details>{% endfor %}</td>
+          <td>{% for g, rate in rule.reference | dictsort %}{{ g }} {{ rate | pct }}<br>{% endfor %}</td>
+        </tr>
+        {% endfor %}
+      </table></div>
+      {% endif %}
+
+      {% set f = r.fields or {} %}
+      {% if f.missing_expected or f.unseen or f.differing %}
+      <h3>Fields compared with the reference apps</h3>
+      <p class="compares sub">Which fields this app includes, compared with how often the reference apps include them in
+      this kind of message: their overall habits, not specific messages. <a href="/about/fields">How fields are scored</a></p>
+      <div class="scroll"><table>
+        <tr><th>Field</th><th><span tabindex="0" data-tip="{{ TIPS.field_kind }}">Kind</span></th><th class="num"><span tabindex="0" data-tip="{{ TIPS.field_app }}">This app</span></th><th><span tabindex="0" data-tip="{{ TIPS.field_reference }}">Reference apps</span></th></tr>
+        {% for m in f.missing_expected %}
+        <tr><td><code>{{ m.path }}</code> <span class="muted">{{ m.subtype }}</span></td><td><span class="sev warning" tabindex="0" data-tip="Every reference app with enough data sends this field in at least 95% of messages of this kind ({{ m.subtype }}); this app sends it in {{ m.app | pct }}.">expected, often missing</span></td>
+            <td class="num">{{ m.app | pct }}</td><td>{% for g, v in m.reference | dictsort %}{{ g }} {{ v | pct }}<br>{% endfor %}</td></tr>
+        {% endfor %}
+        {% for u in f.unseen %}
+        <tr><td><code>{{ u.path }}</code></td><td><span class="sev {{ u.severity }}" tabindex="0" data-tip="None of the reference apps sends this field for this event type. {% if u.severity == 'warning' %}journal/1 accepts any field, so an extra one counts as a warning.{% else %}The schema allows it, so it is only noted.{% endif %}">no reference app sends it</span></td>
+            <td class="num">{{ u.messages | n }} msgs</td><td class="muted">–</td></tr>
+        {% endfor %}
+        {% for d in f.differing %}
+        <tr class="noted"><td><code>{{ d.path }}</code> <span class="muted">{{ d.subtype }}</span></td><td><span class="sev info" tabindex="0" data-tip="An optional field this app sends much more or much less often than the reference apps (difference of 25 points or more). Noted, not scored.">sent at a different rate</span><br><span class="notscored">not scored</span></td>
+            <td class="num">{{ d.app | pct }}</td><td>{% for g, v in d.reference | dictsort %}{{ g }} {{ v | pct }}<br>{% endfor %}</td></tr>
+        {% endfor %}
+      </table></div>
+      {% endif %}
+      {% if f.subtypes %}
+      <p class="muted">Compared by kind:
+        {% for s in f.subtypes %}{{ s.name }} ({{ s.messages | n }}{% if s.compared_with == "*" %}, compared with the whole event type{% endif %}){% if not loop.last %}; {% endif %}{% endfor %}</p>
+      {% endif %}
+
+      {% if r["values"] %}
+      <h3>Values</h3>
+      <p class="compares sub">Each field's values compared with what the reference apps have sent in that field (types,
+      known values, numeric ranges): their overall profile, not specific messages. Each row is one field; one message can
+      appear in several rows.{% if r.values_summary and r.values_summary.flagged %} Here: {{ r["values"] | length }} field{{ "s" if r["values"] | length != 1 }}
+      flagged across {{ r.values_summary.flagged | n }} of {{ r.values_summary.checked | n }} messages checked{% if r.values_summary.scored %},
+      {{ r.values_summary.scored | n }} of them with a scored finding{% else %}, all notes only{% endif %}.{% endif %}
+      <a href="/about/values">How values are scored</a></p>
+      <div class="scroll"><table>
+        <tr><th>Field</th><th><span tabindex="0" data-tip="{{ TIPS.value_finding }}">Finding</span></th><th class="num"><span tabindex="0" data-tip="{{ TIPS.value_messages }}">Messages</span></th><th><span tabindex="0" data-tip="Up to five example values from this app.">This app sent</span></th><th><span tabindex="0" data-tip="What the reference apps send: their known values, or their numeric range.">Reference apps send</span></th></tr>
+        {% for v in r["values"] %}
+        <tr{% if v.severity == "info" %} class="noted"{% endif %}><td><code>{{ v.path }}</code></td>
+            <td><span class="sev {{ v.severity }}" tabindex="0" data-tip="{{ VALUE_TIPS.get(v.kind, '') }}">{{ {"type": "wrong type", "unexpected_format": "unfamiliar format", "uncommon_value": "value not seen from reference apps", "case": "different letter case", "range": "far outside the reference range", "beyond_reference": "outside the reference range"}.get(v.kind, v.kind) }}</span>{% if v.severity == "info" %}<br><span class="notscored">not scored</span>{% endif %}</td>
+            <td class="num">{{ v.count | n }}<br><span class="muted">{{ v.rate | pct }}</span></td>
+            <td class="wrap">{% for a in v.app %}<code>{{ a }}</code> {% endfor %}</td>
+            <td class="sub wrap">{% if v.kind in ("range", "beyond_reference") %}{{ v.reference[0] }} to {{ v.reference[1] }}{% else %}{% for x in v.reference %}<code>{{ x }}</code> {% endfor %}{% endif %}</td></tr>
+        {% endfor %}
+      </table></div>
+      {% endif %}
+
+      {% set p = r.pairing or {} %}
+      {% if p.note %}<h3>Pairing</h3><p class="muted">Not paired: {{ p.note }}.</p>
+      {% elif p.kinds %}
+      <h3>Same object, reported by the reference apps</h3>
+      <p class="compares sub">Each message compared on its own with the reference record for the same system, body or
+      station (one agreed record built from the reference apps' reports; only details that never change). Markets are
+      compared with a reference snapshot taken within 5 minutes. <a href="/about/pairing">How pairing works</a></p>
+      <div class="scroll"><table>
+        <tr><th><span tabindex="0" data-tip="{{ TIPS.pair_compared }}">Compared</span></th><th class="num"><span tabindex="0" data-tip="{{ TIPS.pair_messages }}">Messages paired</span></th><th class="num"><span tabindex="0" data-tip="{{ TIPS.pair_disagree }}">Disagreeing</span></th><th class="num"><span tabindex="0" data-tip="{{ TIPS.pair_fields }}">Fields compared</span></th></tr>
+        {% for kind, k in p.kinds | dictsort %}
+        <tr><td tabindex="0" data-tip="{{ PAIR_TIPS.get(kind, '') }} {{ k.fields_mismatched | n }} of {{ k.fields_compared | n }} compared fields differed.">{{ {"system": "system name and position", "navroute": "route systems", "body": "body data (static fields)", "station": "station name, type and system", "market": "market within 5 minutes (soft)"}.get(kind, kind) }}</td>
+            <td class="num">{{ k.messages | n }}</td>
+            <td class="num">{% if k.mismatched_messages %}<span class="sev warning">{{ k.mismatched_messages | n }}</span>{% else %}0{% endif %}</td>
+            <td class="num">{{ k.fields_compared | n }}</td></tr>
+        {% endfor %}
+      </table></div>
+      {% if p.fields %}<p class="sub">Fields that disagree most: {% for k, v in p.fields | dictsort(by="value", reverse=true) %}<code>{{ k }}</code> {{ v | n }}{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+      {% for ex in p.examples %}<details><summary class="muted">example ({{ ex.kind }}): this app vs reference</summary><pre>{{ ex.mismatches | tojson(indent=1) }}</pre></details>{% endfor %}
+      {% endif %}
+
+      {% set b = r.behaviour or {} %}
+      {% if b.messages %}
+      <h3>Behaviour</h3>
+      <p class="compares sub">How this app sends. Only the amount above the reference apps' own rate for this kind of
+      message counts. <a href="/about/behaviour">How behaviour is scored</a></p>
+      <div class="scroll"><table>
+        <tr><th><span tabindex="0" data-tip="{{ TIPS.behaviour_measure }}">Measure</span></th><th class="num"><span tabindex="0" data-tip="{{ TIPS.behaviour_app }}">This app</span></th><th class="num"><span tabindex="0" data-tip="{{ TIPS.behaviour_reference }}">Reference (worst)</span></th></tr>
+        {% for key, label in (("duplicate", "identical message sent again"), ("stale", "sent over an hour after the event"), ("future", "timestamp in the future"), ("burst", "in bursts of 20+ per second")) %}
+        <tr><td tabindex="0" data-tip="{{ BEHAVIOUR_TIPS[key] }}">{{ label }}</td>
+            <td class="num">{% if b.excess[key] > 0.005 %}<span class="sev warning">{{ b[key] | pct }}</span>{% else %}{{ b[key] | pct }}{% endif %}</td>
+            <td class="num">{{ b.baseline.get(key, 0) | pct }}</td></tr>
+        {% endfor %}
+        {% if b.resend is defined %}
+        <tr><td>re-sent 25–150 s later (retrying sooner than EDDN's 1-minute minimum) <span class="muted">· noted, not scored</span></td>
+            <td class="num">{% if b.resend > 0.005 %}<span class="sev info">{{ b.resend | pct }}</span>{% else %}{{ b.resend | pct }}{% endif %}</td>
+            <td class="num muted">–</td></tr>
+        {% endif %}
+      </table></div>
+      {% endif %}
+    </div>
+  </details>
+  {% endfor %}
+  </div>
+</div>
+
+{% if c.not_sent %}
+<div class="panel">
+  <h2>Not sent by this version</h2>
+  <p class="sub">Reference apps send these; this version sent none. Not counted in the grade:
+  many tools send only what they are built for. Listed in case one should be there.</p>
+  <div class="scroll"><table>
+    <tr><th>Event type</th><th><span tabindex="0" data-tip="{{ TIPS.not_sent_reference }}">Reference apps sending it (messages on file)</span></th></tr>
+    {% for n in c.not_sent %}
+    <tr><td><code>{{ n.event_type }}</code></td><td class="wrap">{% for g, k in n.reference | dictsort %}{{ g }} {{ k | n }}{% if not loop.last %}, {% endif %}{% endfor %}</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+{% endif %}
+
+<div class="panel">
+  <h2>Basis</h2>
+  <p class="sub">Layer weights: {% for k, w in c.weights.items() %}{{ k }} {{ w }}{% if not loop.last %}, {% endif %}{% endfor %}.
+  Event types are weighted by messages (low confidence counts half).
+  Reference versions: {% for g, vs in c.reference_versions | dictsort %}{{ g }} {{ vs | join(", ") }}{% if not loop.last %}; {% endif %}{% endfor %}.
+  <a href="/about">How scoring works</a>.</p>
+</div>
+
+{% if versions %}
+<div class="panel">
+  <h2><span tabindex="0" data-tip="{{ TIPS.versions }}">Versions</span></h2>
+  <p class="sub">{{ versions | length }} version{{ "s" if versions | length != 1 }} of {{ c.app }} seen on EDDN.</p>
+  <div class="versions"><table>
+    <tr><th>Version</th><th>Grade</th><th class="num">Score</th>
+        <th class="num"><span tabindex="0" data-tip="{{ TIPS.versions_messages }}">Messages</span></th><th>First seen</th><th>Last seen</th></tr>
+    {% for v in versions %}
+    {% set here = v.version == c.version %}
+    <tr{% if here %} class="current"{% endif %}>
+      <td>{% if here %}<strong>{{ v.version }}</strong> <span class="muted">(this card)</span>
+          {% elif v.has_card %}<a href="/card/{{ c.app_id }}?v={{ v.version | urlencode }}">{{ v.version }}</a>
+          {% else %}{{ v.version }}{% endif %}</td>
+      {% if v.has_card %}
+      <td>{% if v.grade %}<span class="status {{ grade_status(v.grade) }}">{{ v.grade }}</span>{% else %}<span class="muted">not graded</span>{% endif %}</td>
+      <td class="num">{{ "%.1f" | format(v.score) if v.score is not none else "–" }}</td>
+      {% else %}
+      <td colspan="2" class="muted">no scorecard</td>
+      {% endif %}
+      <td class="num">{{ v.messages | n }}</td>
+      <td>{{ v.first_seen | day }}</td>
+      <td>{{ v.last_seen | day }}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+</div>
+{% endif %}
+{% endblock %}

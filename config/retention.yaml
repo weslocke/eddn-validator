@@ -1,0 +1,25 @@
+# Retention rules, applied hourly by the worker. See docs/DESIGN.md §5.2.
+#
+# Every message, reference apps included, is kept for max_age_days (whole daily
+# partitions are dropped). Changed 2026-10-14: reference-app messages used to be
+# cut to the newest 3000 per event type; they are now kept in full so that facts,
+# profiles and rules can be rebuilt from history at any time.
+
+# Everything is dropped after this many days.
+max_age_days: 183
+
+# Size guard (changed 2026-10-14). The owner's rule is to keep at least 50 GB free
+# on the database drive (shared with other services); the rest
+# may be used. When free space drops below min_free_gb, the reference apps' oldest
+# messages are removed (oldest day first, then that day's partition is compacted)
+# until there is room again. Other apps' messages and the newest 7 days are never
+# touched. The worker sees the drive through a read-only mount at disk_probe.
+min_free_gb: 60
+# While an archive import runs the guard waits for it, unless free space drops below this.
+hard_min_free_gb: 52
+disk_probe: /disk-probe
+# Optional extra cap on the database itself (GB); unset = no cap.
+size_cap_gb:
+
+# Daily partitions are created this many days ahead.
+partitions_ahead_days: 7

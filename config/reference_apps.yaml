@@ -1,0 +1,47 @@
+# Reference ("big three") applications. Each group is its own reference pool.
+# See docs/DESIGN.md §9 and docs/research/ for where these values come from.
+#
+# software_names : exact header.softwareName values that belong to the group.
+# repo           : GitHub repo whose *releases* (not tags) define the
+#                  reference versions. Drafts and pre-releases are ignored.
+# tag_pattern    : regex for release tags; group `v` is the version.
+# version_format : turns `v` into the header.softwareVersion string.
+# keep_releases  : how many of the newest releases count as reference.
+# aliases        : extra header versions that a release is known to report.
+
+groups:
+  EDMC:
+    software_names:
+      - "E:D Market Connector [Windows]"
+      - "E:D Market Connector [Linux]"
+    repo: EDCD/EDMarketConnector
+    tag_pattern: '^Release/(?P<v>\d+\.\d+\.\d+)$'
+    version_format: "{v}"
+    keep_releases: 3
+
+  EDDiscovery:
+    software_names:
+      - "EDDiscovery"
+    repo: EDDiscovery/EDDiscovery
+    tag_pattern: '^Release_(?P<v>\d+\.\d+\.\d+)$'
+    version_format: "{v}.0"
+    keep_releases: 3
+
+  EDDLite:
+    software_names:
+      - "EDDLite"
+    repo: EDDiscovery/EDDLite
+    tag_pattern: '^Release_(?P<v>\d+\.\d+\.\d+)$'
+    version_format: "{v}.0"
+    keep_releases: 3
+    aliases:
+      # The Release_3.1.0 tag was built with AssemblyVersion 3.0.0.0.
+      "3.1.0.0": ["3.0.0.0"]
+
+  EDOMH:
+    software_names:
+      - "EDO Materials Helper"
+    repo: jixxed/ed-odyssey-materials-helper
+    tag_pattern: '^(?P<v>\d+\.\d+\.\d+)$'
+    version_format: "{v}"
+    keep_releases: 3

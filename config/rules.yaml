@@ -1,0 +1,354 @@
+# Documented EDDN rules checked per message (layer 1, docs/DESIGN.md §6.1).
+#
+# Every entry needs a check registered under the same ID in
+# src/eddn_validator/rules.py, and every check needs an entry here.
+#
+#   severity : error (breaks a MUST and the check is reliable)
+#              warning (breaks a MUST by heuristic, or a SHOULD reliably)
+#              info (advisory; shown, never scored)
+#   schemas  : "*" or a list of schema names (journal/1, commodity/3, ...)
+#   source   : where the rule is written (Dev = EDDN docs/Developers.md,
+#              SR = schemas/README-EDDN-schemas.md); see docs/research/eddn-schemas.md
+#   enabled  : false to keep a rule documented but unchecked
+
+rules:
+  # --- header -----------------------------------------------------------------
+  GEN-001:
+    severity: error
+    schemas: "*"
+    title: gameversion must be sent (an empty string if unknown)
+    source: Dev:231-236, 283-285
+  GEN-002:
+    severity: error
+    schemas: "*"
+    title: gamebuild must be sent (an empty string if unknown)
+    source: Dev:277-285
+  GEN-003:
+    severity: warning
+    schemas: "*"
+    title: gameversion must be a game version, a CAPI-(Live|Legacy)-<endpoint> value, or ""
+    source: Dev:238-275
+  GEN-003B:
+    severity: info
+    schemas: "*"
+    title: CAPI gameversion should say Live or Legacy (CAPI-Live-market, not CAPI-market)
+    source: Dev:258-271
+  GEN-004:
+    severity: error
+    schemas: "*"
+    title: CAPI gameversion endpoint must match the schema (market, shipyard, journal)
+    source: Dev:258-271
+  GEN-005:
+    severity: error
+    schemas: "*"
+    title: gamebuild may mirror gameversion only for CAPI-sourced data
+    source: Dev:277-280
+  GEN-006:
+    severity: info
+    schemas: "*"
+    title: gamebuild must be sent as in the journal, white space included
+    source: Dev:281
+  GEN-007:
+    severity: info
+    schemas: "*"
+    title: empty gameversion is only a fallback
+    source: Dev:255-257, 273-275
+  GEN-008:
+    severity: error
+    schemas: [fcmaterials_capi/1]
+    title: CAPI-sourced data must not carry a journal gameversion
+    source: Dev:260-262
+  GEN-010:
+    severity: warning
+    schemas: "*"
+    title: softwareName must be set
+    source: Dev:216-219
+  GEN-011:
+    severity: warning
+    schemas: "*"
+    title: softwareVersion must be set
+    source: Dev:221-229
+  GEN-011B:
+    severity: info
+    schemas: "*"
+    title: softwareVersion should be a version number (SemVer recommended)
+    source: Dev:221-229
+  GEN-014:
+    severity: warning
+    schemas: "*"
+    title: beta or alpha game data must go to /test schemas
+    source: Dev:92-102
+
+  GEN-014B:
+    severity: warning
+    schemas: "*"
+    title: known beta game builds must go to /test schemas (betas no longer say "beta")
+    source: Dev:92-102; EliteDangerousCore EliteReleaseDates.IsBeta (edcd-github-updates.md)
+
+  # --- message-wide ---------------------------------------------------------------
+  GEN-020:
+    severity: error
+    schemas: "*"
+    title: every key ending in _Localised must be removed, at any depth
+    source: Dev:339-340
+  GEN-021:
+    severity: warning
+    schemas: "*"
+    title: timestamps should be UTC
+    source: SR:71-76
+  GEN-022:
+    severity: warning
+    schemas: "*"
+    title: timestamp must not be in the future (local time labelled Z?)
+    source: SR:74-76
+  GEN-023:
+    severity: info
+    schemas: "*"
+    title: data sent more than an hour after the event
+    source: SR:90-91
+  GEN-025:
+    severity: warning
+    schemas: "*"
+    title: odyssey flag must be omitted when LoadGame has none (Legacy clients)
+    source: Dev:366-368
+  GEN-026:
+    severity: warning
+    schemas: "*"
+    title: odyssey true with horizons false never comes from LoadGame (journal-sourced data)
+    source: Dev:405-419
+  GEN-027:
+    severity: info
+    schemas: "*"
+    title: horizons flag should be sent where the schema allows it
+    source: Dev:362
+  GEN-027J:
+    severity: warning
+    schemas: [journal/1]
+    title: journal/1 messages must carry the horizons/odyssey flags
+    source: journal-README:72-80
+  GEN-030:
+    severity: error
+    schemas: "*"
+    title: StarPos must lie inside the boxel its SystemAddress encodes (augmentation cross-check)
+    source: Dev:444-456
+    # Decoder verified 2026-10-13 against 14,791 reference-app FSDJump/Location
+    # positions: all inside their boxel with zero tolerance.
+  GEN-033:
+    severity: error
+    schemas: "*"
+    title: a procedural system name must match its SystemAddress (name and address from different systems)
+    source: Dev:444-456 (cross-check); verified against 4.7M reference-app systems
+  GEN-035:
+    severity: warning
+    schemas: "*"
+    title: a body must belong to the system it is reported in (stale location)
+    source: Dev:444-456; scanorganic-README:64-66
+  GEN-032:
+    severity: warning
+    schemas: "*"
+    title: StarPos [0,0,0] outside Sol is a placeholder
+    source: Dev:444-456
+  GEN-034:
+    severity: warning
+    schemas: "*"
+    title: no commander-specific data
+    source: Dev:333-338
+
+  GEN-040:
+    severity: error
+    schemas: [commodity/3, outfitting/2, outfitting/3, shipyard/2]
+    title: arrays the schema marks unique must not repeat an item
+    source: schemas uniqueItems; gateway accepts these "temporarily" as warnings (eddn.edcd.io)
+  GEN-042:
+    severity: info
+    schemas: "*"
+    title: data from an instanced Operations station (shared placeholder MarketID 127.0M), not the persistent galaxy
+    source: game data (MarketIDs 127,000,000-127,999,999); EDO Materials Helper 3.15.3+ does not send it
+  GEN-043:
+    severity: warning
+    schemas: "*"
+    title: MarketID below any real station (test data on a live schema, or an ID damaged in a 32-bit field)
+    source: Spansh MarketID ranges (real stations start at 128,000,000); Dev:92-102
+  GEN-041:
+    severity: info
+    schemas: "*"
+    title: MarketID 2^64-1 is the game's no-market value (game data, not a sender fault)
+    source: game-data quirk (edcd-github-updates.md C.4)
+
+  # --- per schema -----------------------------------------------------------------
+  JNL-001:
+    severity: warning
+    schemas: [journal/1]
+    title: CodexEntry belongs on codexentry/1
+    source: journal-README:24-25
+  COM-001:
+    severity: error
+    schemas: [commodity/3]
+    title: commodity names must have the $ prefix and _name; suffix removed
+    source: commodity-README:54-55
+  COM-002:
+    severity: warning
+    schemas: [commodity/3]
+    title: economies/prohibited must be left out, not sent empty
+    source: commodity-README:56-57
+  COM-003:
+    severity: warning
+    schemas: [commodity/3]
+    title: NonMarketable items (limpets) must be skipped
+    source: commodity-README:48-52
+  COM-004:
+    severity: info
+    schemas: [commodity/3]
+    title: README says remove StationType, but the schema allows stationType
+    source: commodity-README:41-43
+    # Every journal-sourced EDMC and EDD message sends it; the docs conflict.
+    enabled: false
+  COM-005:
+    severity: info
+    schemas: [commodity/3]
+    title: CAPI-sourced markets should include statusFlags
+    source: commodity-README:81-84
+  COM-006:
+    severity: warning
+    schemas: [commodity/3]
+    title: a Colony economy means horizons must be true
+    source: commodity-README:93-94
+  COM-007:
+    severity: warning
+    schemas: [commodity/3]
+    title: each commodity listed once
+    source: implied
+  OUT-001:
+    severity: error
+    schemas: [outfitting/2, outfitting/3]
+    title: Int_PlanetApproachSuite must be removed
+    source: outfitting-README:50
+  CDX-001:
+    severity: error
+    schemas: [codexentry/1]
+    title: BodyName must not be sent empty
+    source: codexentry-README:80-81
+  CDX-002:
+    severity: error
+    schemas: [codexentry/1]
+    title: BodyID only with a matching BodyName (stellar-body entries carry BodyID natively)
+    source: codexentry-README:66-78
+    # Disabled 2026-10-13: the journal CodexEntry event now carries BodyID itself in
+    # every category (seen from all reference apps, Biology and StellarBodies alike).
+    # The README rule dates from when BodyID could only come from the sender.
+    enabled: false
+  CDX-003:
+    severity: info
+    schemas: [codexentry/1]
+    title: should track BodyName for surface entries
+    source: codexentry-README:38-39
+  FSD-001:
+    severity: warning
+    schemas: [fsssignaldiscovered/1]
+    title: message timestamp is the first signal's timestamp
+    source: fsssignaldiscovered-README:41-42
+  FSD-003:
+    severity: info
+    schemas: [fsssignaldiscovered/1]
+    title: signals in time order
+    source: implied
+  NAV-001:
+    severity: info
+    schemas: [navroute/1]
+    title: an empty Route carries no data
+    source: navroute-README:22-27
+  NAV-002:
+    severity: warning
+    schemas: [navroute/1]
+    title: no repeated consecutive hops
+    source: implied
+  APS-001:
+    severity: warning
+    schemas: [approachsettlement/1]
+    title: MarketID must be sent when present in the source
+    source: approachsettlement-README:22-28
+  SBC-001:
+    severity: info
+    schemas: [scanbarycentre/1]
+    title: should include every orbital element in the source
+    source: scanbarycentre-README:22-23
+  FSB-001:
+    severity: info
+    schemas: [fssbodysignals/1]
+    title: an empty Signals list carries no data
+    source: implied
+  DCK-001:
+    severity: info
+    schemas: [dockinggranted/1, dockingdenied/1]
+    title: StationName should not be empty
+    source: implied
+  FCJ-001:
+    severity: error
+    schemas: [fcmaterials_journal/1]
+    title: fcmaterials_journal is not for CAPI data
+    source: fcmaterials_journal-README:19-22
+  FCJ-002:
+    severity: info
+    schemas: [fcmaterials_journal/1]
+    title: Items should be the FCMaterials.json contents
+    source: fcmaterials_journal-README:28-29
+  FCJ-003:
+    severity: info
+    schemas: [fcmaterials_journal/1, fcmaterials_capi/1]
+    title: CarrierID should be a carrier callsign
+    source: implied
+  FCC-001:
+    severity: warning
+    schemas: [fcmaterials_capi/1]
+    title: Items must be built from onfootmicroresources, not the whole CAPI market
+    source: fcmaterials_capi-README:22-26
+  FCC-002:
+    severity: warning
+    schemas: [fcmaterials_capi/1]
+    title: Items must hold purchases and sales
+    source: fcmaterials_capi-README:33-34
+  FCC-003:
+    severity: error
+    schemas: [fcmaterials_capi/1]
+    title: every locName must be removed
+    source: fcmaterials_capi-README:35, 46
+  FCC-004:
+    severity: warning
+    schemas: [fcmaterials_capi/1]
+    title: sales are keyed by commodity id
+    source: fcmaterials_capi-README:74-78
+  BLK-001:
+    severity: warning
+    schemas: [blackmarket/1]
+    title: blackmarket/1 is deprecated
+    source: blackmarket-README:5-7
+  BLK-002:
+    severity: error
+    schemas: [blackmarket/1]
+    title: TotalSale, AvgPricePaid, StolenGoods, BlackMarket must be removed
+    source: blackmarket-README:27-33
+  OUT-003:
+    severity: warning
+    schemas: [outfitting/3]
+    title: each module id listed once
+    source: implied (uniqueItems only catches identical objects)
+  SCO-001:
+    severity: warning
+    schemas: [scanorganic/1]
+    title: the journal's Body must be renamed to BodyID
+    source: scanorganic-README:60-62
+  SCO-002:
+    severity: warning
+    schemas: [scanorganic/1]
+    title: BodyName must not be sent empty
+    source: implied (mirrors codexentry-README:80-81)
+  SCO-004:
+    severity: warning
+    schemas: [scanorganic/1, codexentry/1, approachsettlement/1]
+    title: Latitude and Longitude must be in range
+    source: implied
+  SCO-005:
+    severity: info
+    schemas: [scanorganic/1]
+    title: Variant should be a variant of the Species
+    source: implied (EDDN issue 212)
