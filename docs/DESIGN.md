@@ -826,3 +826,15 @@ A reader read a 100% score next to a list of "outside the reference range" findi
   - severities read serious / minor / note, and notes are dimmed and marked "not scored";
   - the layer column headings link to their pages.
 - `score_values` returns a summary (messages checked, distinct messages with any finding, messages with a scored finding). The Values section shows it as "N fields flagged across M of K messages checked", since one message can appear in several field rows.
+
+---
+
+## 27. Rule corrections from the reference apps' own failure rates (2026-10-15)
+
+A rule that one trusted app breaks constantly while the others never do usually means a check that is too literal. Reviewing every rule the reference apps break more than 1% of the time:
+
+- **APS-001 (MarketID with settlement data) was a false positive.** It took any `Station…` field as evidence of a market. For Guardian ruins the game writes an empty `"StationFaction": {}` into ApproachSettlement; EDO Materials Helper passes it through while the other apps drop empty fields, so EDO alone failed 9% (all 966 cases in a week were empty factions, 918 of them `$Ancient` ruins). The check now ignores empty station fields. EDDN's own ruins sample predates the empty field, which is why the tests did not catch it.
+- **COM-005 is switched off.** CAPI markets only sometimes carry `statusFlags` (commodity README), so the check could not tell a correct market without flags from flags dropped by the sender; EDMC and EDDiscovery "failed" it on about half their CAPI markets.
+- **GEN-040 is now minor (warning), not serious.** The repeats are real (the game lists some modules and ships more than once, and the schemas say senders must remove them), but EDDN's gateway only warns, and EDMC and EDDLite both send them.
+- Confirmed genuine and unchanged: OUT-001 (EDDiscovery, EDDLite), COM-002 (EDMC), CDX-003 (EDDLite, a note), GEN-023 (EDO's late re-sends, a note), GEN-042 (game data, a note).
+

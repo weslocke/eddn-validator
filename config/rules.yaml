@@ -155,7 +155,9 @@ rules:
     source: Dev:333-338
 
   GEN-040:
-    severity: error
+    # warning, not error (2026-10-15): EDDN's gateway itself only warns about these, and the
+    # reference apps repeat items too (the game lists some modules and ships more than once).
+    severity: warning
     schemas: [commodity/3, outfitting/2, outfitting/3, shipyard/2]
     title: arrays the schema marks unique must not repeat an item
     source: schemas uniqueItems; gateway accepts these "temporarily" as warnings (eddn.edcd.io)
@@ -208,6 +210,9 @@ rules:
     schemas: [commodity/3]
     title: CAPI-sourced markets should include statusFlags
     source: commodity-README:81-84
+    # Off (2026-10-15): CAPI only "sometimes" has statusFlags (README), so a market sent without
+    # any is usually correct and cannot be told apart from flags dropped by the sender.
+    enabled: false
   COM-006:
     severity: warning
     schemas: [commodity/3]

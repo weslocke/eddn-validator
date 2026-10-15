@@ -102,6 +102,8 @@ RULE_GROUPS: list[tuple[str, list[tuple[str, str]]]] = [
 SWITCHED_OFF = {
     "COM-004": "EDDN's documentation contradicts itself about the station type in market data.",
     "CDX-002": "The game now includes the planet ID itself, so the old rule no longer applies.",
+    "COM-005": "Frontier's online service only sometimes includes status flags, so a market without "
+               "them is usually correct.",
 }
 
 SUBTYPES = [

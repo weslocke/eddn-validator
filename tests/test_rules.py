@@ -237,3 +237,17 @@ def test_eddn_repo_fixtures_load_without_errors():
     import json
     for path in files:
         evaluate(ALL_RULES, json.loads(path.read_text()))
+
+
+def test_aps001_ignores_an_empty_station_faction_at_ruins():
+    from eddn_validator.config import Settings
+    from eddn_validator.rules import evaluate, load_rules
+    rules = [r for r in load_rules(Settings.from_env().load_yaml("rules.yaml")) if r.id == "APS-001"]
+    def env(message):
+        return {"$schemaRef": "https://eddn.edcd.io/schemas/approachsettlement/1",
+                "header": {"softwareName": "x", "softwareVersion": "1"}, "message": message}
+    ruins = {"Name": "$Ancient_Small_005:#index=1;", "BodyID": 44, "StationFaction": {}}
+    assert not evaluate(rules, env(ruins))                                    # Guardian ruins: no market
+    settlement = {"Name": "Rogers Hold", "StationFaction": {"Name": "Some Faction"}}
+    assert evaluate(rules, env(settlement))                                   # real settlement, MarketID missing
+    assert not evaluate(rules, env({**settlement, "MarketID": 3_900_000_001}))

@@ -643,7 +643,11 @@ def navroute_repeated_hop(ctx: Ctx) -> str | None:
 
 @check("APS-001")
 def settlement_station_without_market(ctx: Ctx) -> str | None:
-    station_keys = [k for k in ctx.message if k.startswith("Station")]
+    # Station details with content mean a settlement with a market. Market-less sites
+    # (Guardian ruins, visitor beacons) carry none, or an empty StationFaction ({}), which the
+    # game writes for ruins and some senders pass through; that is no evidence of a market.
+    station_keys = [k for k, v in ctx.message.items()
+                    if k.startswith("Station") and v not in (None, "", {}, [])]
     if station_keys and "MarketID" not in ctx.message:
         return f"{station_keys[0]} sent but MarketID missing"
     return None
