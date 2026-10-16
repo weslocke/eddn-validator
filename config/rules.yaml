@@ -129,7 +129,7 @@ rules:
   GEN-030:
     severity: error
     schemas: "*"
-    title: StarPos must lie inside the boxel its SystemAddress encodes (augmentation cross-check)
+    title: StarPos and SystemAddress must describe the same place (StarPos inside the boxel the id64 encodes)
     source: Dev:444-456
     # Decoder verified 2026-10-13 against 14,791 reference-app FSDJump/Location
     # positions: all inside their boxel with zero tolerance.

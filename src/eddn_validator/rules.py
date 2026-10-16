@@ -422,8 +422,12 @@ def starpos_outside_system_address(ctx: Ctx) -> str | None:
             return f"{where}StarPos {str(pos)[:60]} for {name!r} is not a position in the galaxy"
         boxel = decode_id64(address)
         if boxel and not boxel.contains(p):
-            return (f"{where}StarPos {pos} for {name!r} is {boxel.distance_outside(p):.0f} ly "
-                    f"outside the region its SystemAddress {address} encodes")
+            # Says which fields disagree, not which one is wrong: in journal events the
+            # SystemAddress usually comes from the game, while StarSystem/StarPos are often the
+            # sender's own additions, and those are the ones that go stale after a jump.
+            return (f"{where}StarPos {pos} and system name {name!r} do not belong to SystemAddress "
+                    f"{address}: they are {boxel.distance_outside(p):.0f} ly outside the region it "
+                    f"encodes, so one of them is from another system")
     return None
 
 

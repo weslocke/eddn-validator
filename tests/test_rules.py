@@ -251,3 +251,17 @@ def test_aps001_ignores_an_empty_station_faction_at_ruins():
     settlement = {"Name": "Rogers Hold", "StationFaction": {"Name": "Some Faction"}}
     assert evaluate(rules, env(settlement))                                   # real settlement, MarketID missing
     assert not evaluate(rules, env({**settlement, "MarketID": 3_900_000_001}))
+
+
+def test_gen030_wording_names_both_fields_not_a_culprit():
+    from eddn_validator.config import Settings
+    from eddn_validator.rules import evaluate, load_rules
+    rules = [r for r in load_rules(Settings.from_env().load_yaml("rules.yaml")) if r.id == "GEN-030"]
+    # A real case (2026-10-16): HIP 6653's name and position with Ceti Sector EB-X b1-4's id64.
+    env = {"$schemaRef": "https://eddn.edcd.io/schemas/fsssignaldiscovered/1",
+           "header": {"softwareName": "x", "softwareVersion": "1"},
+           "message": {"event": "FSSSignalDiscovered", "StarSystem": "HIP 6653", "SystemAddress": 9466510189969,
+                       "StarPos": [-44.75, -123.15625, -55.875], "timestamp": "2026-10-16T20:18:45Z",
+                       "signals": [{"SignalName": "Wilde Keep", "timestamp": "2026-10-16T20:18:45Z"}]}}
+    detail = evaluate(rules, env)[0].detail
+    assert "do not belong to SystemAddress 9466510189969" in detail and "one of them is from another system" in detail

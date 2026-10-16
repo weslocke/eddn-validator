@@ -37,7 +37,8 @@ RULE_GROUPS: list[tuple[str, list[tuple[str, str]]]] = [
         ("GEN-014B", "Data from a known beta build of the game goes to the test channel."),
     ]),
     ("Where things are", [
-        ("GEN-030", "A star system's position matches the part of the galaxy its system ID points to."),
+        ("GEN-030", "A star system's position matches the part of the galaxy its system ID points to "
+                    "(catches a name and position left over from the previous system after a jump)."),
         ("GEN-033", "A star system's name matches its system ID (for names the game generates)."),
         ("GEN-035", "A planet or moon belongs to the star system it is reported in."),
         ("GEN-032", "No made-up 0, 0, 0 position for any system other than Sol."),
