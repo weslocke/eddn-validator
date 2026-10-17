@@ -3,8 +3,8 @@
 # Every entry needs a check registered under the same ID in
 # src/eddn_validator/rules.py, and every check needs an entry here.
 #
-#   severity : error (breaks a MUST and the check is reliable)
-#              warning (breaks a MUST by heuristic, or a SHOULD reliably)
+#   severity : error (breaks a MUST, or makes the data wrong for listeners, and the check is reliable)
+#              warning (breaks a MUST by heuristic, or a SHOULD or plain instruction reliably)
 #              info (advisory; shown, never scored)
 #   schemas  : "*" or a list of schema names (journal/1, commodity/3, ...)
 #   source   : where the rule is written (Dev = EDDN docs/Developers.md,
@@ -69,12 +69,12 @@ rules:
     title: CAPI market or shipyard data must not carry the journal's build as gamebuild
     source: Dev:258-262, 277-280, 296-299
   GEN-010:
-    severity: warning
+    severity: error
     schemas: "*"
     title: softwareName must be set
     source: Dev:216-219
   GEN-011:
-    severity: warning
+    severity: error
     schemas: "*"
     title: softwareVersion must be set
     source: Dev:221-229
@@ -107,7 +107,7 @@ rules:
     title: timestamps should be UTC
     source: SR:71-76
   GEN-022:
-    severity: warning
+    severity: info   # the behaviour layer scores future-dated messages; not counted twice
     schemas: "*"
     title: timestamp must not be in the future (local time labelled Z?)
     source: SR:74-76
@@ -159,7 +159,7 @@ rules:
     title: StarPos [0,0,0] outside Sol is a placeholder
     source: Dev:444-456
   GEN-034:
-    severity: warning
+    severity: error   # a MUST (Dev:333-336), matched on exact key names
     schemas: "*"
     title: no commander-specific data
     source: Dev:333-338
@@ -194,12 +194,12 @@ rules:
     title: CodexEntry is better sent on codexentry/1
     source: journal-README:24-25
   COM-001:
-    severity: error
+    severity: error   # a plain instruction, but $gold_name; does not match gold for listeners
     schemas: [commodity/3]
     title: commodity names must have the $ prefix and _name; suffix removed
     source: commodity-README:54-55
   COM-002:
-    severity: warning
+    severity: error   # MUST NOT (commodity-README:56-57), journal-sourced markets only
     schemas: [commodity/3]
     title: economies/prohibited must be left out, not sent empty
     source: commodity-README:56-57
@@ -298,7 +298,7 @@ rules:
     title: StationName should not be empty
     source: implied
   FCJ-001:
-    severity: error
+    severity: error   # an NB, not a MUST, but CAPI data has a different shape from FCMaterials.json
     schemas: [fcmaterials_journal/1]
     title: fcmaterials_journal is not for CAPI data
     source: fcmaterials_journal-README:19-22

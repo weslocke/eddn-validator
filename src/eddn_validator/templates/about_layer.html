@@ -45,7 +45,9 @@ message left it out, Rules would be 0 and the event type would lose all {{ weigh
 checks the basic layout of a message, so most of these rules are never enforced. The validator checks
 each message against them, one message at a time.</p>
 <p>A <strong>Serious</strong> rule counts fully against the score, a <strong>Minor</strong> one counts half,
-and a <strong>Note</strong> is shown on the scorecard but never counted. Each finding on a scorecard also
+and a <strong>Note</strong> is shown on the scorecard but never counted. A rule is serious when it breaks something
+EDDN says an app must do, or leaves the data wrong for whoever uses it, and the check cannot be mistaken; minor when
+the check is a strong guess, or the rule is advice; a note when it is worth knowing but not a fault. Each finding on a scorecard also
 shows how often the established apps break the same rule, for fairness.</p>
 <p>The {{ total }} rules checked, in plain English. The <a href="/about/technical">technical reference</a> lists each
 one's exact definition, schemas, severity weight and source, along with every scoring parameter.</p>

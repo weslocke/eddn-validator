@@ -867,3 +867,12 @@ A multi-agent review compared every rule with the documentation it cites (`EDCD/
 Of the review's own findings, only GEN-027J and JNL-001 matched a message that week (OUT-001 was lowered afterwards, on a separate question).
 
 The technical page now opens each rule into what it checks exactly (exceptions included), a failing and a passing example, and how often each reference app fails it. The rates are read from the reference profiles, which migration 0011 lets the web role read. The examples live in `config/rule_details.yaml`, and `tests/test_rules.py` runs each one through the real checks. A failing example must raise the rule and a passing one must not, so the page cannot drift from the code. Every enabled rule must have an entry. The page also gained sections on what pairing compares and on what the gateway already rejects.
+
+## 30. Severity standard made consistent (2026-10-17)
+
+The stated standard is now: **serious** when the rule is a MUST, or breaking it leaves the data wrong for listeners, and the check is reliable. **Minor** when the check is a heuristic, or the rule is a SHOULD or a plain instruction. **Note** for advice, and for timing rules the behaviour layer already scores. Applied:
+
+- **GEN-022** (future-dated) is now a note, like GEN-023 (late). The behaviour layer measures both with the same thresholds, so a future-dated message was being penalised twice.
+- **GEN-034** (personal data), **COM-002** (empty lists, journal-sourced), **GEN-010** and **GEN-011** (softwareName, softwareVersion) are now serious. Each is a MUST, checked reliably. On the current cards they affect one app (GEN-034), EDDI and older EDMC cards (COM-002; EDMC's clear on rebuild, being CAPI), and nobody (GEN-010, GEN-011).
+- **COM-001** and **FCJ-001** stay serious without a MUST behind them, because the data is wrong for listeners: `$gold_name;` does not match `gold`, and CAPI materials data has a different shape from FCMaterials.json. OUT-001, a plain instruction where the data is not wrong, stays minor.
+- GEN-025's description now attributes its claim to the developer guide: whether the current Legacy client (3.8.0.2100) still leaves Odyssey out of LoadGame could not be confirmed.

@@ -101,7 +101,7 @@ GEN-021:
   passes: {message: {timestamp: "2026-10-13T12:00:00Z"}}
 
 GEN-022:
-  how: "The event's timestamp is more than 5 minutes after the moment the EDDN gateway received the message. Being a whole number of hours ahead usually means local time labelled as UTC."
+  how: "The event's timestamp is more than 5 minutes after the moment the EDDN gateway received the message. Being a whole number of hours ahead usually means local time labelled as UTC. A note: the behaviour layer already scores future-dated messages, so they are not counted twice."
   fails: {header: {gatewayTimestamp: "2026-10-13T12:00:05Z"}, message: {timestamp: "2026-10-13T16:00:05Z"}}
   passes: {header: {gatewayTimestamp: "2026-10-13T12:00:05Z"}, message: {timestamp: "2026-10-13T12:00:00Z"}}
 
@@ -111,7 +111,7 @@ GEN-023:
   passes: {header: {gatewayTimestamp: "2026-10-13T12:00:05Z"}, message: {timestamp: "2026-10-13T11:59:00Z"}}
 
 GEN-025:
-  how: "An odyssey flag is sent with a Legacy gameversion (3.x, or CAPI-Legacy-…). Legacy clients' LoadGame has no Odyssey key, so the flag must be left out."
+  how: "An odyssey flag is sent with a Legacy gameversion (3.x, or CAPI-Legacy-…). EDDN's developer guide says a Legacy client's LoadGame has no Odyssey key, and that the flag must then be left out, not sent as false."
   fails: {header: {gameversion: 3.8.0.407, gamebuild: "r269979/r0 "}, message: {odyssey: false}}
   passes: {header: {gameversion: 3.8.0.407, gamebuild: "r269979/r0 "}, message: {odyssey: (left out)}}
 

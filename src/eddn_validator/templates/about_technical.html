@@ -57,7 +57,10 @@ overall   = Σ event × messages × c / Σ messages × c      c = 1, or 0.5 belo
             event types below {{ sc.confidence.insufficient_below }} messages and unrecognised schemas are left out
 grade     = {% for g, v in sc.grades.items() %}{{ g }} ≥ {{ v }}{% if not loop.last %}, {% endif %}{% endfor %}, otherwise F</code>
 <p class="muted">w(severity): {% for k, v in severity_weights.items() %}{{ {"error": "serious", "warning": "minor", "info": "note"}.get(k, k) }} ({{ k }}) {{ v }}{% if not loop.last %} · {% endif %}{% endfor %}.
-A message breaking several rules counts once per rule in the Rules layer, and once in the Values layer.</p>
+A message breaking several rules counts once per rule in the Rules layer, and once in the Values layer.
+Severity: <em>serious</em> when the rule is a MUST in EDDN's documentation, or breaking it leaves the data wrong for listeners,
+and the check is reliable; <em>minor</em> when the check is a heuristic, or the rule is a SHOULD or a plain instruction;
+<em>note</em> for advice, and for timing rules the behaviour layer already scores (GEN-022, GEN-023).</p>
 
 <h2>Parameters</h2>
 <div class="scroll"><table class="params">
