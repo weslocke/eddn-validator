@@ -152,12 +152,21 @@ def persistent_market(market: int | None) -> bool:
 # Spansh's ranges): 3400xxxxxx rescue ships, 3600xxxxxx megaships, 3700-3939xxxxxx fleet
 # carriers (some journals call them surface stations). Plus anything typed as such.
 MOVING_TYPES = {"fleetcarrier", "megaship"}
+CARRIER_RANGE = range(3_600_000_000, 3_940_000_000)
 
 
 def moving_station(market: int, kind: str | None) -> bool:
-    return (kind in MOVING_TYPES
-            or 3_400_000_000 <= market < 3_500_000_000
-            or 3_600_000_000 <= market < 3_940_000_000)
+    """Whether a station can change system (so its system is not compared).
+
+    Decided by type when it is known: carriers and megaships move, and so do PowerPlay
+    Stronghold Carriers, which the game reports as SurfaceStation with IDs in the carrier
+    range. Every other known type is fixed, whatever its ID: Odyssey settlements (3.8-3.94e9)
+    and crater outposts (3.7-3.8e9) share the carrier ID blocks. The ID ranges decide only
+    when the type is unknown (3.4e9 rescue ships, 3.6-3.94e9 megaships and carriers)."""
+    key = station_type_key(kind)
+    if key is not None:
+        return key in MOVING_TYPES or (key == "surfacestation" and market in CARRIER_RANGE)
+    return 3_400_000_000 <= market < 3_500_000_000 or market in CARRIER_RANGE
 
 
 def station_system(event_type: str, message: dict) -> tuple[str | None, int | None]:

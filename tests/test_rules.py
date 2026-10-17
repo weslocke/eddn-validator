@@ -135,7 +135,7 @@ CASES = [
     ("GEN-034", mutate("journal/1", lambda m: m.update(Factions=[{"Name": "F", "MyReputation": 5.0}]))),
     ("JNL-001", mutate("journal/1", lambda m: m.update(event="CodexEntry"))),
     ("COM-001", mutate("commodity/3", lambda m: m["commodities"][0].update(name="$gold_name;"))),
-    ("COM-002", mutate("commodity/3", lambda m: m.update(prohibited=[]))),
+    ("COM-002", mutate("commodity/3", lambda m: m.update(prohibited=[]), gameversion="4.2.1.0", gamebuild="r311234/r0 ")),
     ("COM-003", mutate("commodity/3", lambda m: m["commodities"][0].update(name="Drones"))),
     ("COM-005", envelope("commodity/3")),
     ("COM-006", mutate("commodity/3", lambda m: m.update(horizons=False, odyssey=False,
@@ -265,3 +265,42 @@ def test_gen030_wording_names_both_fields_not_a_culprit():
                        "signals": [{"SignalName": "Wilde Keep", "timestamp": "2026-10-16T20:18:45Z"}]}}
     detail = evaluate(rules, env)[0].detail
     assert "do not belong to SystemAddress 9466510189969" in detail and "one of them is from another system" in detail
+
+
+def _rule(rule_id):
+    from eddn_validator.config import Settings
+    from eddn_validator.rules import load_rules
+    return [r for r in load_rules(Settings.from_env().load_yaml("rules.yaml")) if r.id == rule_id]
+
+
+def _env(schema, message, gv="4.0.0.1900", gb="r1"):
+    return {"$schemaRef": f"https://eddn.edcd.io/schemas/{schema}",
+            "header": {"softwareName": "x", "softwareVersion": "1", "gameversion": gv, "gamebuild": gb},
+            "message": message}
+
+
+def test_doc_audit_fixes_2026_10_17():
+    from eddn_validator.rules import evaluate
+    market = {"systemName": "Sol", "stationName": "Abraham Lincoln", "marketId": 128016640,
+              "timestamp": "2026-10-17T00:00:00Z", "commodities": [], "prohibited": []}
+    assert not evaluate(_rule("COM-002"), _env("commodity/3", market, gv="CAPI-Live-market", gb="CAPI-Live-market"))
+    assert evaluate(_rule("COM-002"), _env("commodity/3", market))               # journal-sourced: still a finding
+    assert evaluate(_rule("GEN-005"), _env("journal/1", {"event": "Docked"}, gv="4.0.0.1475", gb="4.0.0.1475"))
+    assert not evaluate(_rule("GEN-005"), _env("journal/1", {"event": "Docked"}, gv="4.0.0.1475", gb="r292165/r0 "))
+    sig = {"event": "FSSSignalDiscovered", "timestamp": "2026-10-17T00:00:00.000Z",
+           "signals": [{"timestamp": "2026-10-17T00:00:00Z", "SignalName": "x"}]}
+    assert not evaluate(_rule("FSD-001"), _env("fsssignaldiscovered/1", sig))      # same time, more precision
+    assert not evaluate(_rule("SBC-001"), _env("scanbarycentre/1", {"event": "ScanBaryCentre"}))
+    assert evaluate(_rule("SBC-001"), _env("scanbarycentre/1", {"event": "ScanBaryCentre", "SemiMajorAxis": 1.0}))
+
+
+def test_moving_stations_by_type_then_range():
+    from eddn_validator.facts import moving_station
+    assert not moving_station(3_915_738_368, "OnFootSettlement")   # EDDN's own sample settlement
+    assert not moving_station(3_750_000_000, "CraterOutpost")
+    assert moving_station(3_700_000_256, "FleetCarrier")
+    assert moving_station(371_163_417_601, "FleetCarrier")          # carrier IDs beyond the range
+    assert moving_station(3_850_000_000, "SurfaceStation")          # PowerPlay Stronghold Carrier
+    assert not moving_station(4_200_000_000, "SurfaceStation")
+    assert moving_station(3_850_000_000, None)                      # unknown type: range decides
+    assert not moving_station(128_016_640, None)

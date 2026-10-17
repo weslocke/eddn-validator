@@ -259,6 +259,9 @@ def gamebuild_mirrors_journal(ctx: Ctx) -> str | None:
     if isinstance(gb, str) and gb.startswith("CAPI-") and (
             not ctx.gv.startswith("CAPI-") or gb != ctx.gv):
         return f"gamebuild {gb!r} with gameversion {ctx.gv!r}"
+    # Mirroring gameversion is allowed only for CAPI values (Dev:279-280), not a journal version.
+    if isinstance(gb, str) and gb and gb == ctx.gv and JOURNAL_GV.match(ctx.gv):
+        return f"gamebuild {gb!r} copies the journal gameversion"
     return None
 
 
@@ -527,6 +530,10 @@ def commodity_symbol_name(ctx: Ctx) -> str | None:
 
 @check("COM-002")
 def commodity_empty_lists(ctx: Ctx) -> str | None:
+    # The README's rule is for journal-sourced markets (Market.json has neither list, so leave
+    # them out rather than send them empty); CAPI data may legitimately carry an empty list.
+    if ctx.gv.startswith("CAPI-"):
+        return None
     empty = [k for k in ("economies", "prohibited") if ctx.message.get(k) == []]
     return f"empty {' and '.join(empty)} list sent" if empty else None
 
@@ -616,7 +623,9 @@ def signals_timestamp_mismatch(ctx: Ctx) -> str | None:
     signals = _items(ctx.message.get("signals"))
     if signals and isinstance(signals[0], dict):
         first = signals[0].get("timestamp")
-        if first != ctx.message.get("timestamp"):
+        # Compared as times, not text: sub-second resolution is allowed (SR:77-81).
+        top = ctx.message.get("timestamp")
+        if first != top and (parse_ts(first) is None or parse_ts(first) != parse_ts(top)):
             return f"timestamp {ctx.message.get('timestamp')!r} is not the first signal's {first!r}"
     return None
 
@@ -659,8 +668,10 @@ def settlement_station_without_market(ctx: Ctx) -> str | None:
 
 @check("SBC-001")
 def barycentre_missing_elements(ctx: Ctx) -> str | None:
+    # Each element is to be sent "if it's in the source data" (scanbarycentre-README:22-23), so
+    # only a partial set, some elements kept and others dropped, shows a sender dropping them.
     missing = [k for k in ORBITAL_ELEMENTS if k not in ctx.message]
-    return f"missing {', '.join(missing)}" if missing else None
+    return f"missing {', '.join(missing)}" if missing and len(missing) < len(ORBITAL_ELEMENTS) else None
 
 
 @check("FSB-001")

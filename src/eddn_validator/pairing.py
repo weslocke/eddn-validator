@@ -257,10 +257,12 @@ def pair_messages(conn: psycopg.Connection, deadline: float, upto: int | None = 
         results = []
         for mid, gw_ts, msg_ts, app_id, version, event_type, source, m, branch in messages:
             try:
-                # Body facts are live-game only (facts.Batch.add): Legacy scans aren't compared.
+                # Body, station and market facts are live-game only (facts.Batch.add): Legacy
+                # messages are compared on systems alone (the same galaxy in both).
+                live = branch != "legacy"
                 pairs = compare_all(m, event_type, gw_ts, msg_ts, source, known_systems,
-                                    known_bodies if branch != "legacy" else {}, known_stations,
-                                    snapshots)
+                                    known_bodies if live else {}, known_stations if live else {},
+                                    snapshots if live else {})
             except Exception:   # sender-controlled JSON: one odd message must never stall pairing
                 log.exception("pairing skipped message %s", mid)
                 continue

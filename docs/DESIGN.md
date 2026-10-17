@@ -836,5 +836,17 @@ A rule that one trusted app breaks constantly while the others never do usually 
 - **APS-001 (MarketID with settlement data) was a false positive.** It took any `Station…` field as evidence of a market. For Guardian ruins the game writes an empty `"StationFaction": {}` into ApproachSettlement; EDO Materials Helper passes it through while the other apps drop empty fields, so EDO alone failed 9% (all 966 cases in a week were empty factions, 918 of them `$Ancient` ruins). The check now ignores empty station fields. EDDN's own ruins sample predates the empty field, which is why the tests did not catch it.
 - **COM-005 is switched off.** CAPI markets only sometimes carry `statusFlags` (commodity README), so the check could not tell a correct market without flags from flags dropped by the sender; EDMC and EDDiscovery "failed" it on about half their CAPI markets.
 - **GEN-040 is now minor (warning), not serious.** The repeats are real (the game lists some modules and ships more than once, and the schemas say senders must remove them), but EDDN's gateway only warns, and EDMC and EDDLite both send them.
-- Confirmed genuine and unchanged: OUT-001 (EDDiscovery, EDDLite), COM-002 (EDMC), CDX-003 (EDDLite, a note), GEN-023 (EDO's late re-sends, a note), GEN-042 (game data, a note).
+- Confirmed genuine and unchanged: OUT-001 (EDDiscovery, EDDLite), CDX-003 (EDDLite, a note), GEN-023 (EDO's late re-sends, a note), GEN-042 (game data, a note). COM-002 (EDMC) was listed here too, wrongly: see §28.
 
+## 28. Corrections from a read of EDDN's documentation (2026-10-17)
+
+After the ruins case (§27), every schema README and the developer guide were read again for edge cases the checks get wrong. Six were confirmed against the data:
+
+- **COM-002 (empty `economies`/`prohibited`) applies to journal-sourced markets only.** The README's advice is for Market.json, which has neither list, so a journal-based sender should leave them out. CAPI data can carry a genuinely empty list, so CAPI markets (gameversion `CAPI-…`) are no longer checked. EDMC's "failures" were all CAPI.
+- **Moving stations are decided by type first.** Odyssey settlements (IDs 3.8–3.94e9) and crater outposts and ports (3.7–3.8e9) share ID blocks with carriers. The station-system comparison skipped them as if they could move, so those mismatches were never caught. Now carriers and megaships move, and so does a `SurfaceStation` with an ID in the carrier range: these are PowerPlay "Stronghold Carrier"s. Any other known type is fixed. The ID ranges decide only when the type is unknown.
+- **Legacy messages pair on systems only.** Body facts were already live-only. Station and market facts are now live-only too (the Legacy galaxy has no Odyssey settlements or Colonisation stations, and markets differ), so Legacy messages are no longer compared against them.
+- **GEN-005 also catches a journal gameversion copied into gamebuild.** The developer guide allows mirroring gameversion into gamebuild only for CAPI values.
+- **FSD-001 compares times, not text.** A signal timestamp with more sub-second digits than the top-level one is the same moment.
+- **SBC-001 respects "if it's in the source data".** A ScanBaryCentre with none of the orbital elements is what the game wrote. Only a partial set, with some elements kept and others dropped, is flagged.
+
+The 2022 facts pull (§24) was restarted with this code so its re-pair uses it. Cards are rebuilt on the normal cycle.
