@@ -50,7 +50,7 @@ STATIC = {
                    "station or market (20%).",
     "col_behaviour": "Duplicates, late or future-dated messages and bursts, compared with the "
                      "reference apps' own rates (10%).",
-    "col_confidence": "ok: 30 or more messages. low: 5 to 29, counts half in the grade. "
+    "col_confidence": "ok: 30 or more messages. low: 5 to 29, counts less in the grade, in proportion. "
                       "too few: under 5, shown but not scored.",
     "rule": "The rule's ID, what it requires, and where EDDN's documentation says so.",
     "severity": "serious counts fully against the Rules score, minor counts half, a note is "
@@ -158,7 +158,7 @@ def _row_tips(row: dict, card: dict) -> dict[str, str]:
         tips["behaviour"] = "No behaviour data."
 
     tips["confidence"] = {"ok": f"{row['messages']:,} messages: enough for a full-weight score.",
-                          "low": f"{row['messages']:,} messages: scored, but counts half in the grade.",
+                          "low": f"{row['messages']:,} messages: scored, but each counts {row['messages']}/30 of a full message in the grade.",
                           "insufficient": f"{row['messages']:,} messages: too few to score."}[row["confidence"]]
     tips["event"] = STATIC["col_event"] + (
         "\nNot sent by any reference app: checked against the rules only, left out of the grade."

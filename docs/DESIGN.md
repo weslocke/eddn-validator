@@ -876,3 +876,10 @@ The stated standard is now: **serious** when the rule is a MUST, or breaking it 
 - **GEN-034** (personal data), **COM-002** (empty lists, journal-sourced), **GEN-010** and **GEN-011** (softwareName, softwareVersion) are now serious. Each is a MUST, checked reliably. On the current cards they affect one app (GEN-034), EDDI and older EDMC cards (COM-002; EDMC's clear on rebuild, being CAPI), and nobody (GEN-010, GEN-011).
 - **COM-001** and **FCJ-001** stay serious without a MUST behind them, because the data is wrong for listeners: `$gold_name;` does not match `gold`, and CAPI materials data has a different shape from FCMaterials.json. OUT-001, a plain instruction where the data is not wrong, stays minor.
 - GEN-025's description now attributes its claim to the developer guide: whether the current Legacy client (3.8.0.2100) still leaves Odyssey out of LoadGame could not be confirmed.
+
+## 31. Weak spots and a smooth confidence ramp (2026-10-17)
+
+A review of the scoring maths (an outside opinion, checked against the code) raised two valid points. Its other points were already handled: the rules floor, structure weighting, missing layers, pairing with no pairs, and insufficient data. The two changes:
+
+- **Weak spots.** The overall score is weighted by message count, so a broken low-volume event type barely moves it. For example, journal messages at 99 and 100 market messages at 20 still give 98.9. The grade stays as it is, since it measures what listeners receive per message. Instead, every event type with at least `low_below` (30) messages that scores below C is recorded as a weak spot, both in the card and in a new `scorecards.weak_spots` column (migration 0012), so the lists need not read whole cards. Weak spots show under the card's header, beside the grade on the All apps and New apps lists, and in the picker's version list. Existing cards were filled in once from their own rows: 77 of 989 have one.
+- **Confidence ramp.** The low-confidence weight jumped from half to full at 30 messages. It is now `messages × min(1, messages / 30)`, a smooth ramp from 5 to 30 messages.

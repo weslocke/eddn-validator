@@ -64,6 +64,8 @@
   pre { background: var(--code-bg); padding: 10px; border-radius: 6px; overflow-x: auto;
         white-space: pre-wrap; word-break: break-all; max-height: 260px; }
   /* Status: a coloured mark plus a text label, never colour alone. */
+  .weak { font-size: .82rem; color: var(--text-2); white-space: nowrap; }
+  .weak::before { content: "▲ "; color: var(--serious); }
   .status { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
   .status::before { content: ""; width: 10px; height: 10px; border-radius: 50%;
                     background: var(--none); flex: none; }

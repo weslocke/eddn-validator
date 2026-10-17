@@ -53,6 +53,8 @@
       <span tabindex="0" data-tip="{{ TIPS.window_ref if c.is_reference else TIPS.window }}">{% if c.all_messages %}all messages on file{% if c.oldest %} (since {{ c.oldest[:10] }}){% endif %}{% else %}last {{ c.range_days }} day{{ "s" if c.range_days > 1 }}{% endif %}</span> ·
       <span tabindex="0" data-tip="{{ TIPS.computed }}">computed {{ c.computed_at | age }}</span>
     </div>
+    {% if c.weak_spots %}<div class="sub"><span class="weak" tabindex="0" data-tip="{{ c.weak_spots | weak_tip }}">Weak spot{{ "s" if c.weak_spots | length > 1 }}:</span>
+      {% for s in c.weak_spots %}{{ s.event_type }}{% if s.branch != "live" %} ({{ s.branch }}){% endif %} <span class="status {{ grade_status(s.grade) }}">{{ s.grade }} · {{ "%.1f" | format(s.score) }}</span>{% if not loop.last %} · {% endif %}{% endfor %}</div>{% endif %}
   </div>
 </div>
 

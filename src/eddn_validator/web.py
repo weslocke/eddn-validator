@@ -141,19 +141,20 @@ def _versions_by_app(conn, app_ids: list[int] | None = None) -> dict[int, list[d
     rows = conn.execute(
         """
         SELECT v.app_id, v.version, v.first_seen, v.last_seen, v.msg_count,
-               c.version IS NOT NULL, c.grade, c.score, c.messages
+               c.version IS NOT NULL, c.grade, c.score, c.messages, c.weak_spots
           FROM app_versions v
           LEFT JOIN LATERAL (
-                SELECT s.version, s.grade, s.score, s.messages FROM scorecards s
+                SELECT s.version, s.grade, s.score, s.messages, s.weak_spots FROM scorecards s
                  WHERE s.app_id = v.app_id AND s.version = v.version
                  ORDER BY s.range_days DESC LIMIT 1) c ON true
          WHERE %s::int[] IS NULL OR v.app_id = ANY(%s::int[])
         """, (app_ids, app_ids)).fetchall()
     out: dict[int, list[dict]] = {}
-    for app_id, version, first, last, n, has_card, grade, score, card_n in rows:
+    for app_id, version, first, last, n, has_card, grade, score, card_n, weak in rows:
         out.setdefault(app_id, []).append({
             "version": version, "first_seen": first, "last_seen": last, "messages": n,
-            "has_card": has_card, "grade": grade, "score": score, "card_messages": card_n})
+            "has_card": has_card, "grade": grade, "score": score, "card_messages": card_n,
+            "weak_spots": weak or []})
     return {app_id: newest_first(vs) for app_id, vs in out.items()}
 
 
@@ -165,7 +166,7 @@ def load_apps() -> list[dict]:
     out = []
     for app_id, name, group in apps:
         carded = [{"v": v["version"], "last": v["last_seen"].isoformat(), "g": v["grade"],
-                   "s": v["score"], "n": v["card_messages"]}
+                   "s": v["score"], "n": v["card_messages"], "w": len(v["weak_spots"])}
                   for v in versions.get(app_id, []) if v["has_card"]]
         if carded:
             out.append({"id": app_id, "name": name, "ref": group, "versions": carded})
@@ -207,7 +208,7 @@ def load_new_apps() -> dict:
                      "versions": len(vs), "messages": sum(v["messages"] for v in vs),
                      "latest": shown["version"], "has_card": shown["has_card"],
                      "grade": shown["grade"], "score": shown["score"],
-                     "newest": vs[0]["version"]})
+                     "weak_spots": shown["weak_spots"], "newest": vs[0]["version"]})
     return {"apps": apps, "data_since": data_since, "since": since}
 
 
@@ -228,6 +229,7 @@ def load_all_apps() -> list[dict]:
                     "version": graded["version"] if graded else None,
                     "grade": graded["grade"] if graded else None,
                     "score": graded["score"] if graded else None,
+                    "weak_spots": graded["weak_spots"] if graded else [],
                     "recent": last is not None and last > recent,
                     "current": vs[0]["version"] if vs else None,
                     # A newest version with nothing left on file will never get a card.
@@ -300,6 +302,14 @@ def _doc(prefix: str) -> tuple[str, str, str]:
     return f"schemas/{prefix}.md", f"EDDN {schema} schema README", commit
 
 
+def weak_tip(spots: list[dict]) -> str:
+    """Hover text for a weak-spot flag: each event type below C, with its grade and score."""
+    lines = [f"{s['event_type']}{' (' + s['branch'] + ')' if s['branch'] != 'live' else ''}: "
+             f"{s['grade']} {s['score']:.1f}, {s['messages']:,} messages" for s in spots]
+    return ("Event types scoring below C with enough messages to judge. The grade is weighted by "
+            "message count, so a weak low-volume event type barely moves it.\n" + "\n".join(lines))
+
+
 def source_link(source: str | None) -> dict | None:
     """The first EDDN documentation reference in a rule's source, as {url, tip}; None when the
     source cites no EDDN document (e.g. "implied", "game data")."""
@@ -340,6 +350,7 @@ def source_links(source: str | None) -> Markup:
 templates.env.filters["breakable"] = breakable
 templates.env.filters["source_links"] = source_links
 templates.env.filters["source_link"] = source_link
+templates.env.filters["weak_tip"] = weak_tip
 templates.env.filters["age"] = _age
 templates.env.filters["day"] = lambda d: d.astimezone(timezone.utc).strftime("%Y-%m-%d") if d else "–"
 templates.env.filters["when"] = lambda d: d.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC") if d else "–"

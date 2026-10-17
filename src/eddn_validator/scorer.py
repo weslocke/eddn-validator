@@ -49,6 +49,22 @@ MAX_FIELD_ROWS = 40
 MAX_VALUE_ROWS = 25
 
 
+def confidence_weight(messages: int, low_below: int) -> float:
+    """An event type's weight in the overall score: its message count, scaled down in
+    proportion below low_below messages (a smooth ramp, no jump at the threshold)."""
+    return messages * min(1.0, messages / low_below)
+
+
+def weak_spots(rows: list[dict], grades: dict) -> list[dict]:
+    """Event types with enough data (confidence ok) that score below C. The overall score is
+    weighted by message count, so one of these can sit under a good grade; the lists flag them."""
+    spots = [{"event_type": r["event_type"], "branch": r["branch"], "score": r["score"],
+              "grade": grade_for(r["score"], grades), "messages": r["messages"]}
+             for r in rows if r.get("score") is not None and r["recognised"]
+             and r["confidence"] == "ok" and r["score"] < grades["C"]]
+    return sorted(spots, key=lambda s: s["score"])
+
+
 def grade_for(score: float | None, grades: dict) -> str | None:
     if score is None:
         return None
@@ -626,9 +642,10 @@ class Scorer:
                 entry["layers"] = {k: (round(v, 1) if v is not None else None) for k, v in layers.items()}
             out_rows.append(entry)
 
-        # Weighted by message count (low confidence counts half): the grade says how much of
-        # what the app sends is sound, so a bad high-volume event type cannot hide.
-        graded = [(r["score"], r["messages"] * (1.0 if r["confidence"] == "ok" else 0.5))
+        # Weighted by message count, ramped down below conf["low_below"] messages: the grade
+        # says how much of what the app sends is sound. A weak low-volume event type barely
+        # moves it, so those are listed separately (weak_spots).
+        graded = [(r["score"], confidence_weight(r["messages"], conf["low_below"]))
                   for r in out_rows if r.get("score") is not None and r["recognised"]]
         score = (round(sum(s * w for s, w in graded) / sum(w for _, w in graded), 1)
                  if graded else None)
@@ -648,6 +665,7 @@ class Scorer:
             "is_reference": app["ref_group"] is not None, "ref_group": app["ref_group"],
             "computed_at": self.now.isoformat(), "messages": sum(totals.values()),
             "score": score, "grade": grade_for(score, cfg["grades"]),
+            "weak_spots": weak_spots(out_rows, cfg["grades"]),
             "weights": weights,
             "reference_versions": dict(self.ref.versions),
             "gameversions": {"classes": dict(gv_classes), "values": dict(gv_counts.most_common(10))},
@@ -687,13 +705,15 @@ class Scorer:
                 self.conn.execute(
                     """
                     INSERT INTO scorecards (app_id, version, range_days, computed_at, messages,
-                                            score, grade, card)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                                            score, grade, card, weak_spots)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (app_id, version, range_days) DO UPDATE SET
                         computed_at = EXCLUDED.computed_at, messages = EXCLUDED.messages,
-                        score = EXCLUDED.score, grade = EXCLUDED.grade, card = EXCLUDED.card
+                        score = EXCLUDED.score, grade = EXCLUDED.grade, card = EXCLUDED.card,
+                        weak_spots = EXCLUDED.weak_spots
                     """, (app["id"], version, days, self.now, card["messages"], card["score"],
-                          card["grade"], json.dumps(card, default=str)))
+                          card["grade"], json.dumps(card, default=str),
+                          json.dumps(card["weak_spots"])))
                 written += 1
         return written
 

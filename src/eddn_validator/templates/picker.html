@@ -68,6 +68,7 @@ send? Pick an application, then a version.</p>
       <td class="num" data-sort="{{ a.versions }}">{{ a.versions }}</td>
       <td class="num" data-sort="{{ a.messages }}">{{ "{:,}".format(a.messages) }}</td>
       <td data-sort="{{ a.score if a.score is not none else (-1 if a.has_card else -2) }}">{% if a.has_card %}<a href="/card/{{ a.id }}?v={{ a.latest | urlencode }}"><span class="status {{ grade_status(a.grade) }}">{{ a.grade or "not graded (too few messages)" }}{% if a.score is not none %} · {{ "%.1f" | format(a.score) }}{% endif %}</span></a>
+          {% if a.weak_spots %}<br><span class="weak" tabindex="0" data-tip="{{ a.weak_spots | weak_tip }}">{{ a.weak_spots | length }} weak spot{{ "s" if a.weak_spots | length > 1 }}</span>{% endif %}
           {% else %}<span class="muted">scorecard pending (within the hour)</span>{% endif %}</td>
     </tr>
     {% endfor %}
@@ -141,6 +142,7 @@ send? Pick an application, then a version.</p>
       link.append(a);
       const grade = el("td");
       grade.append(el("span", v.g || "not graded", "status " + (status[v.g] || "none")));
+      if (v.w) grade.append(" ", el("span", v.w + " weak spot" + (v.w > 1 ? "s" : ""), "weak"));
       tr.append(link, el("td", new Date(v.last).toLocaleDateString()), grade,
                 el("td", v.s == null ? "–" : v.s.toFixed(1), "num"),
                 el("td", v.n.toLocaleString(), "num"));

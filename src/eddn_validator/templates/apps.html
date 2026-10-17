@@ -28,6 +28,7 @@ that scorecard.</p>
         {% if a.version is not none %}
         <span class="grade-cell" tabindex="0" data-tip="{% if a.grade %}Grade {{ a.grade }}, score {{ a.score | round(1) }} out of 100, for version {{ a.version }}.{% else %}Version {{ a.version }} sent too few messages to be graded.{% endif %}">
           {% if a.grade %}<span class="status {{ grade_status(a.grade) }}">{{ a.grade }} · {{ "%.1f" | format(a.score) }}</span>{% else %}<span class="muted">not graded</span>{% endif %}</span>
+        {% if a.weak_spots %}<span class="weak" tabindex="0" data-tip="{{ a.weak_spots | weak_tip }}">{{ a.weak_spots | length }} weak spot{{ "s" if a.weak_spots | length > 1 }}</span>{% endif %}
         {% endif %}
       </span>
       <span class="meta">last seen {{ a.last_seen | when }}{% if a.version is not none %}{% if a.version != a.current and a.current_on_file %} · newest {{ a.current }} not graded yet{% endif %}{% elif a.recent %} · scorecard pending (within the hour){% else %} · no scorecard (no messages left on file){% endif %}</span>

@@ -53,8 +53,9 @@ values    = 100 × (1 − (msgs with an error finding + {{ severity_weights.warn
 pairing   = 100 × (1 − (mismatched hard pairs + 0.5 × mismatched market pairs) / pairs)
 behaviour = 100 × (1 − min(1, Σ max(0, app_rate − worst_reference_rate)))   duplicate, stale, future, burst
 event     = Σ weight × layer / Σ weight        weights: {% for k, v in sc.weights.items() %}{{ k }} {{ v }}{% if not loop.last %}, {% endif %}{% endfor %}
-overall   = Σ event × messages × c / Σ messages × c      c = 1, or 0.5 below {{ sc.confidence.low_below }} messages;
+overall   = Σ event × messages × c / Σ messages × c      c = min(1, messages / {{ sc.confidence.low_below }});
             event types below {{ sc.confidence.insufficient_below }} messages and unrecognised schemas are left out
+weak spot = an event type with {{ sc.confidence.low_below }}+ messages scoring below {{ sc.grades.C }}, flagged beside the grade
 grade     = {% for g, v in sc.grades.items() %}{{ g }} ≥ {{ v }}{% if not loop.last %}, {% endif %}{% endfor %}, otherwise F</code>
 <p class="muted">w(severity): {% for k, v in severity_weights.items() %}{{ {"error": "serious", "warning": "minor", "info": "note"}.get(k, k) }} ({{ k }}) {{ v }}{% if not loop.last %} · {% endif %}{% endfor %}.
 A message breaking several rules counts once per rule in the Rules layer, and once in the Values layer.

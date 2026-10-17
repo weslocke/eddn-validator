@@ -57,7 +57,9 @@ full list of what it checks.</p>
     (shown, never counted).</li>
   <li>The overall score combines the kinds of message by how many of each the app sent, so a problem in the app's
     busiest message type cannot hide behind many small clean ones. Kinds with fewer than 5 messages are shown but not
-    scored; fewer than 30 count half.</li>
+    scored; below 30 each message counts less, in proportion (with 10 messages, a third as much). A kind of message
+    with 30 or more messages that scores below C is flagged as a <span class="weak">weak spot</span> beside the
+    grade, so a problem in a small message type is not lost behind a good grade either.</li>
   <li>Kinds of message the app never sends are listed but never counted: many tools send only what they are built for.</li>
   <li>Grades: <span class="status good">A</span> 90 and over · <span class="status warning">B</span> 80 ·
     <span class="status warning">C</span> 70 · <span class="status serious">D</span> 60 ·
