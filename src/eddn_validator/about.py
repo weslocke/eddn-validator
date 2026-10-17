@@ -189,3 +189,34 @@ def context(settings: Settings, layer: str) -> dict:
                    burst=scoring["burst_per_second"],
                    excluded=", ".join(scoring.get("behaviour_baseline_exclude", [])))
     return ctx
+
+
+RULE_FAMILIES = {
+    "GEN": "General (every schema)", "COM": "Commodity", "OUT": "Outfitting", "SHP": "Shipyard",
+    "CDX": "Codex entries", "FSD": "FSS signals", "NAV": "Nav route", "APS": "Approach settlement",
+    "SBC": "Barycentre scans", "FSB": "FSS body signals", "DCK": "Docking", "SCO": "Scan organic",
+    "FCJ": "Fleet carrier materials (journal)", "FCC": "Fleet carrier materials (CAPI)",
+    "BLK": "Black market (retired schema)", "JNL": "Journal",
+}
+
+
+def technical_context(settings: Settings) -> dict:
+    """Every rule in config/rules.yaml, exactly as configured, plus the scoring parameters."""
+    scoring = settings.load_yaml("scoring.yaml")
+    rules_cfg = settings.load_yaml("rules.yaml").get("rules", {})
+    sev_w = scoring["severity_weights"]
+    families: dict[str, list[dict]] = {}
+    off = []
+    for rule_id, cfg in sorted(rules_cfg.items()):
+        schemas = cfg.get("schemas", "*")
+        row = {"id": rule_id, "severity": cfg["severity"], "weight": sev_w.get(cfg["severity"], 0),
+               "schemas": "all" if schemas == "*" else ", ".join(schemas),
+               "title": cfg.get("title", ""), "source": cfg.get("source", "")}
+        if not cfg.get("enabled", True):
+            off.append({**row, "why": SWITCHED_OFF.get(rule_id, "")})
+            continue
+        families.setdefault(RULE_FAMILIES.get(rule_id.split("-")[0], "Other"), []).append(row)
+    order = list(RULE_FAMILIES.values()) + ["Other"]
+    groups = [(name, families[name]) for name in order if name in families]
+    return {"groups": groups, "off": off, "total": sum(len(r) for _, r in groups),
+            "scoring": scoring, "severity_weights": sev_w}

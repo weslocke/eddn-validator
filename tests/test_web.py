@@ -229,3 +229,14 @@ def test_rules_page_links_rule_ids_to_eddn_docs():
     assert web.source_link("implied") is None
     link = web.source_link("fcmaterials_journal-README:19-22")
     assert link["url"].endswith("schemas/fcmaterials_journal-README.md?plain=1#L19-L22")
+
+
+def test_technical_reference_lists_every_rule():
+    from eddn_validator.config import Settings
+    page = client.get("/about/technical")
+    assert page.status_code == 200
+    rules = Settings.from_env().load_yaml("rules.yaml")["rules"]
+    for rule_id in rules:
+        assert f"<code>{rule_id}</code>" in page.text, rule_id
+    assert "Switched off" in page.text and "COM-005" in page.text
+    assert "w = 0.5" in page.text and "duplicate_window_hours" in page.text

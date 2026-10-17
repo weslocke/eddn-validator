@@ -387,6 +387,13 @@ def all_apps(request: Request):
         "apps": apps, "nonce": request.state.nonce})
 
 
+@app.get("/about/technical", response_class=HTMLResponse)
+def about_technical(request: Request):
+    from .about import technical_context
+    data = cache.get(("about", "technical"), lambda: technical_context(settings))
+    return templates.TemplateResponse(request, "about_technical.html", {**data, "nonce": request.state.nonce})
+
+
 @app.get("/about/{layer}", response_class=HTMLResponse)
 def about_layer(request: Request, layer: str):
     from .about import LAYERS, context

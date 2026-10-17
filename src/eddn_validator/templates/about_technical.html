@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% set sc = scoring %}
+{% block title %}Technical reference · How scoring works · EDDN Validator{% endblock %}
+{% block style %}
+  .prose { max-width: 1100px; }
+  .prose p { margin: 8px 0 0; max-width: 820px; }
+  .prose h2 { margin-top: 28px; }
+  .crumbs { font-size: .9rem; margin-bottom: 10px; }
+  .crumbs a { margin-right: 10px; }
+  table.rules td, table.rules th { vertical-align: top; }
+  table.rules td.def { white-space: normal; min-width: 280px; }
+  table.rules td.src { white-space: normal; min-width: 180px; font-size: .85rem; }
+  table.rules td.sch { white-space: normal; min-width: 110px; font-size: .85rem; color: var(--text-2); }
+  table.params td:first-child { white-space: nowrap; }
+  table.params td:first-child code { overflow-wrap: normal; }
+  table.params td:last-child { white-space: normal; min-width: 320px; }
+  .formula { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .86rem;
+             background: var(--code-bg); padding: 8px 12px; border-radius: 6px; display: block; margin-top: 8px;
+             white-space: pre-wrap; }
+{% endblock %}
+{% block content %}
+<div class="prose">
+<div class="crumbs"><a href="/about">How scoring works</a><a href="/about/rules">Rules in plain English</a><strong>Technical reference</strong></div>
+<h1>Technical reference</h1>
+<p class="sub">Every rule and scoring parameter as configured right now, read from <code>config/rules.yaml</code> and
+<code>config/scoring.yaml</code> (source: <a href="https://github.com/weslocke/eddn-validator">github.com/weslocke/eddn-validator</a>).
+Rule IDs link to the lines of EDDN's documentation that state the rule, at the EDDN commit the rules were written from.</p>
+
+<h2>How the numbers combine</h2>
+<p>Per event type (and branch), each layer that has data scores 0–100; the event type's score is their weighted mean,
+with the weights of layers without data spread over the rest.</p>
+<code class="formula">rules     = 100 × (1 − Σ_rule  w(severity) × failing_messages / messages_checked)        floor 0
+structure = mean over subtypes, by messages, of 100 × (1 − mean miss rate of expected fields)
+            × (1 − {{ severity_weights.warning }} × share with a field no reference app sends)   [journal/1 only]
+values    = 100 × (1 − (msgs with an error finding + {{ severity_weights.warning }} × msgs with only warnings) / msgs checked)
+pairing   = 100 × (1 − (mismatched hard pairs + 0.5 × mismatched market pairs) / pairs)
+behaviour = 100 × (1 − min(1, Σ max(0, app_rate − worst_reference_rate)))   duplicate, stale, future, burst
+event     = Σ weight × layer / Σ weight        weights: {% for k, v in sc.weights.items() %}{{ k }} {{ v }}{% if not loop.last %}, {% endif %}{% endfor %}
+overall   = Σ event × messages × c / Σ messages × c      c = 1, or 0.5 below {{ sc.confidence.low_below }} messages;
+            event types below {{ sc.confidence.insufficient_below }} messages and unrecognised schemas are left out
+grade     = {% for g, v in sc.grades.items() %}{{ g }} ≥ {{ v }}{% if not loop.last %}, {% endif %}{% endfor %}, otherwise F</code>
+<p class="muted">w(severity): {% for k, v in severity_weights.items() %}{{ {"error": "serious", "warning": "minor", "info": "note"}.get(k, k) }} ({{ k }}) {{ v }}{% if not loop.last %} · {% endif %}{% endfor %}.
+A message breaking several rules counts once per rule in the Rules layer, and once in the Values layer.</p>
+
+<h2>Parameters</h2>
+<div class="scroll"><table class="params">
+  <tr><th>Parameter</th><th>Value</th><th>Used for</th></tr>
+  <tr><td><code>sample_per_event_type</code></td><td class="num">{{ sc.sample_per_event_type }}</td><td>Newest messages per event type checked in detail (rules, fields, values); counts and behaviour use every message on file</td></tr>
+  <tr><td><code>expected_threshold</code></td><td class="num">{{ sc.expected_threshold }}</td><td>A field is "expected" when every reference app with enough data includes it in at least this share of messages</td></tr>
+  <tr><td><code>common_threshold</code></td><td class="num">{{ sc.common_threshold }}</td><td>Optional fields compared for "sent at a different rate" (a note, 25-point gap)</td></tr>
+  <tr><td><code>reference_min_messages</code></td><td class="num">{{ sc.reference_min_messages }}</td><td>Reference messages a subtype needs before it is compared on its own (otherwise the whole event type)</td></tr>
+  <tr><td><code>values.enum_max_distinct</code> / <code>enum_min_samples</code></td><td class="num">{{ sc["values"].enum_max_distinct }} / {{ sc["values"].enum_min_samples }}</td><td>A field is a closed set when the reference apps send fewer distinct values than this, over at least this many samples</td></tr>
+  <tr><td><code>values.numeric_margin</code></td><td class="num">{{ sc["values"].numeric_margin }}</td><td>Beyond the reference min/max by up to this share of the span: no finding</td></tr>
+  <tr><td><code>values.numeric_margin_warning</code></td><td class="num">{{ sc["values"].numeric_margin_warning }}</td><td>Beyond it by more than this many spans, or the wrong sign, or above 2 in a field the reference apps fill with 0–1: a warning; anything between: a note</td></tr>
+  <tr><td><code>duplicate_window_hours</code></td><td class="num">{{ sc.duplicate_window_hours }}</td><td>An identical message (same content hash) within this long of its previous copy is a duplicate</td></tr>
+  <tr><td><code>stale_after_minutes</code></td><td class="num">{{ sc.stale_after_minutes }}</td><td>Gateway time minus event time above this: late</td></tr>
+  <tr><td><code>future_after_minutes</code></td><td class="num">{{ sc.future_after_minutes }}</td><td>Event time ahead of gateway time by more than this: future-dated</td></tr>
+  <tr><td><code>burst_per_second</code></td><td class="num">{{ sc.burst_per_second }}</td><td>Messages of one event type in one second at or above this: a burst</td></tr>
+  <tr><td><code>behaviour_baseline_exclude</code></td><td>{{ sc.behaviour_baseline_exclude | join(", ") }}</td><td>Reference apps left out of the behaviour allowance (they re-send old journal entries on start-up)</td></tr>
+  <tr><td>Window</td><td>all on file</td><td>One card per version over every message still held (about six months); the reference apps' own cards cover their last 7 days</td></tr>
+</table></div>
+<p class="muted">Fields never value-checked (open-ended): {% for f in sc["values"].open_fields %}<code>{{ f }}</code>{% if not loop.last %} {% endif %}{% endfor %}</p>
+
+<h2>Rules ({{ total }} active)</h2>
+{% for name, rows in groups %}
+<h3>{{ name }}</h3>
+<div class="scroll"><table class="rules">
+  <tr><th>Rule</th><th>Severity</th><th>Schemas</th><th>Definition</th><th>Source</th></tr>
+  {% for r in rows %}
+  {% set link = r.source | source_link %}
+  <tr>
+    <td>{% if link %}<a href="{{ link.url }}" target="_blank" rel="noopener noreferrer" data-tip="{{ link.tip }}"><code>{{ r.id }}</code></a>{% else %}<code>{{ r.id }}</code>{% endif %}</td>
+    <td><span class="sev {{ r.severity }}">{{ {"error": "serious", "warning": "minor", "info": "note"}.get(r.severity, r.severity) }}</span><br><span class="muted">w = {{ r.weight }}</span></td>
+    <td class="sch">{{ r.schemas }}</td>
+    <td class="def">{{ r.title }}</td>
+    <td class="src">{{ r.source | source_links }}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% endfor %}
+
+{% if off %}
+<h2>Switched off ({{ off | length }})</h2>
+<div class="scroll"><table class="rules">
+  <tr><th>Rule</th><th>Schemas</th><th>Definition</th><th>Why it is off</th></tr>
+  {% for r in off %}
+  {% set link = r.source | source_link %}
+  <tr>
+    <td>{% if link %}<a href="{{ link.url }}" target="_blank" rel="noopener noreferrer" data-tip="{{ link.tip }}"><code>{{ r.id }}</code></a>{% else %}<code>{{ r.id }}</code>{% endif %}</td>
+    <td class="sch">{{ r.schemas }}</td>
+    <td class="def">{{ r.title }}</td>
+    <td class="def">{{ r.why }}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% endif %}
+</div>
+{% endblock %}

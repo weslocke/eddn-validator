@@ -47,7 +47,8 @@ each message against them, one message at a time.</p>
 <p>A <strong>Serious</strong> rule counts fully against the score, a <strong>Minor</strong> one counts half,
 and a <strong>Note</strong> is shown on the scorecard but never counted. Each finding on a scorecard also
 shows how often the established apps break the same rule, for fairness.</p>
-<p>The {{ total }} rules checked:</p>
+<p>The {{ total }} rules checked, in plain English. The <a href="/about/technical">technical reference</a> lists each
+one's exact definition, schemas, severity weight and source, along with every scoring parameter.</p>
 {% for g in groups %}
 <h2>{{ g.title }}</h2>
 <ul class="items">
