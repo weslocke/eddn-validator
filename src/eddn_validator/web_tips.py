@@ -210,7 +210,7 @@ PAIR_TIPS = {
     "body": "The body's fixed details (mass, radius, gravity, atmosphere, materials, rings, orbit) "
             "compared with a reference app's scan of the same body.",
     "station": "The station's name and type (if seen within 7 days) and the system it is in "
-               "(carriers and megaships excepted), compared with reference reports of the same MarketID.",
+               "(carriers, megaships and Stronghold Carriers excepted), compared with reference reports of the same MarketID.",
     "market": "Goods and buy/sell prices compared with a reference app's snapshot of the same market "
               "within 5 minutes. Counts half: prices can change between visits.",
 }
