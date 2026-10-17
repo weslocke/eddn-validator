@@ -11,6 +11,13 @@
   #matches button .chip { margin-left: 6px; }
   #versions table td a { text-decoration: none; }
   .ver { color: var(--text-2); font-variant-numeric: tabular-nums; }
+  button.sort { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: inherit;
+                cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+  button.sort:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; border-radius: 3px; }
+  button.sort .arrow { font-size: .7rem; color: var(--muted); min-width: .8em; }
+  th[aria-sort="ascending"] .arrow::after { content: "▲"; color: var(--text); }
+  th[aria-sort="descending"] .arrow::after { content: "▼"; color: var(--text); }
+  th[aria-sort="none"] button.sort:hover .arrow::after { content: "↕"; }
 {% endblock %}
 {% block content %}
 <h1>EDDN application scorecards</h1>
@@ -42,19 +49,25 @@ send? Pick an application, then a version.</p>
   <span class="muted">(Oldest records in database: {{ new.data_since | day }})</span></p>
   {% endif %}
   {% if new.apps %}
-  <div class="scroll"><table>
-    <thead><tr><th>Application</th><th>First seen</th><th>Last seen</th><th class="num">Versions</th>
-      <th class="num">Messages</th><th>Grade</th></tr></thead>
+  <div class="scroll"><table id="new-apps">
+    <thead><tr>
+      <th aria-sort="ascending" data-type="text"><button type="button" class="sort">Application<span class="arrow"></span></button></th>
+      <th aria-sort="none" data-type="num"><button type="button" class="sort">First seen<span class="arrow"></span></button></th>
+      <th aria-sort="none" data-type="num"><button type="button" class="sort">Last seen<span class="arrow"></span></button></th>
+      <th aria-sort="none" data-type="num" class="num"><button type="button" class="sort">Versions<span class="arrow"></span></button></th>
+      <th aria-sort="none" data-type="num" class="num"><button type="button" class="sort">Messages<span class="arrow"></span></button></th>
+      <th aria-sort="none" data-type="num"><button type="button" class="sort">Grade<span class="arrow"></span></button></th>
+    </tr></thead>
     <tbody>
     {% for a in new.apps %}
     <tr>
-      <td>{{ a.name or "(no name)" }} <span class="ver">{{ a.latest }}</span>{% if a.newest != a.latest %}
+      <td data-sort="{{ (a.name or '') | lower }}">{{ a.name or "(no name)" }} <span class="ver">{{ a.latest }}</span>{% if a.newest != a.latest %}
         <br><span class="muted">newest {{ a.newest }} not graded yet</span>{% endif %}</td>
-      <td>{{ a.first_seen | when }}</td>
-      <td>{{ a.last_seen | when }}</td>
-      <td class="num">{{ a.versions }}</td>
-      <td class="num">{{ "{:,}".format(a.messages) }}</td>
-      <td>{% if a.has_card %}<a href="/card/{{ a.id }}?v={{ a.latest | urlencode }}"><span class="status {{ grade_status(a.grade) }}">{{ a.grade or "not graded (too few messages)" }}{% if a.score is not none %} · {{ "%.1f" | format(a.score) }}{% endif %}</span></a>
+      <td data-sort="{{ a.first_seen.timestamp() if a.first_seen else 0 }}">{{ a.first_seen | when }}</td>
+      <td data-sort="{{ a.last_seen.timestamp() if a.last_seen else 0 }}">{{ a.last_seen | when }}</td>
+      <td class="num" data-sort="{{ a.versions }}">{{ a.versions }}</td>
+      <td class="num" data-sort="{{ a.messages }}">{{ "{:,}".format(a.messages) }}</td>
+      <td data-sort="{{ a.score if a.score is not none else (-1 if a.has_card else -2) }}">{% if a.has_card %}<a href="/card/{{ a.id }}?v={{ a.latest | urlencode }}"><span class="status {{ grade_status(a.grade) }}">{{ a.grade or "not graded (too few messages)" }}{% if a.score is not none %} · {{ "%.1f" | format(a.score) }}{% endif %}</span></a>
           {% else %}<span class="muted">scorecard pending (within the hour)</span>{% endif %}</td>
     </tr>
     {% endfor %}
@@ -68,6 +81,37 @@ send? Pick an application, then a version.</p>
 <script type="application/json" id="apps-data">{{ apps | tojson }}</script>
 {% endblock %}
 {% block script %}
+<script nonce="{{ nonce }}">
+(function () {
+  // Sortable new-applications table: click a heading to sort, click again to reverse.
+  const table = document.getElementById("new-apps");
+  if (!table) return;
+  const heads = Array.from(table.tHead.rows[0].cells);
+  const body = table.tBodies[0];
+  function key(row, i, type) {
+    const v = row.cells[i].dataset.sort || "";
+    return type === "num" ? parseFloat(v) || 0 : v;
+  }
+  function sortBy(i, dir) {
+    const type = heads[i].dataset.type;
+    const rows = Array.from(body.rows);
+    rows.sort((a, b) => {
+      const x = key(a, i, type), y = key(b, i, type);
+      const c = type === "num" ? x - y : x.localeCompare(y);
+      // ties: by application name, always A–Z
+      return (c * dir) || key(a, 0, "text").localeCompare(key(b, 0, "text"));
+    });
+    rows.forEach(r => body.appendChild(r));
+    heads.forEach((h, j) => h.setAttribute("aria-sort", j === i ? (dir > 0 ? "ascending" : "descending") : "none"));
+  }
+  heads.forEach((h, i) => h.querySelector("button").addEventListener("click", () => {
+    const now = h.getAttribute("aria-sort");
+    // First click: names A–Z; dates, counts and grades highest (newest) first. Next click reverses.
+    const first = h.dataset.type === "text" ? 1 : -1;
+    sortBy(i, now === "none" ? first : (now === "ascending" ? -1 : 1));
+  }));
+})();
+</script>
 <script nonce="{{ nonce }}">
 (function () {
   const apps = JSON.parse(document.getElementById("apps-data").textContent);
