@@ -240,3 +240,16 @@ def test_technical_reference_lists_every_rule():
         assert f"<code>{rule_id}</code>" in page.text, rule_id
     assert "Switched off" in page.text and "COM-005" in page.text
     assert "w = 0.5" in page.text and "duplicate_window_hours" in page.text
+
+
+def test_split_not_sent_moves_types_earlier_versions_sent():
+    from datetime import datetime, timezone
+    from eddn_validator.web import split_not_sent
+    t = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    card = {"not_sent": [{"event_type": "journal/1:Scan", "reference": {}},
+                         {"event_type": "navroute/1", "reference": {}}]}
+    others = [("2026.10.2", {"journal/1:Scan": 40}, t), ("2026.10.10", {"journal/1:Scan": 5}, t),
+              ("2026.9.1", None, t)]
+    split_not_sent(card, others)
+    assert [n["event_type"] for n in card["not_sent"]] == ["navroute/1"]
+    assert [(n["event_type"], n["version"]) for n in card["not_yet"]] == [("journal/1:Scan", "2026.10.10")]

@@ -65,6 +65,14 @@ def weak_spots(rows: list[dict], grades: dict) -> list[dict]:
     return sorted(spots, key=lambda s: s["score"])
 
 
+def event_type_counts(rows: list[dict]) -> dict[str, int]:
+    """Messages per event type on a card, branches added together."""
+    counts: dict[str, int] = {}
+    for r in rows:
+        counts[r["event_type"]] = counts.get(r["event_type"], 0) + r["messages"]
+    return counts
+
+
 def grade_for(score: float | None, grades: dict) -> str | None:
     if score is None:
         return None
@@ -705,15 +713,16 @@ class Scorer:
                 self.conn.execute(
                     """
                     INSERT INTO scorecards (app_id, version, range_days, computed_at, messages,
-                                            score, grade, card, weak_spots)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                            score, grade, card, weak_spots, event_types)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (app_id, version, range_days) DO UPDATE SET
                         computed_at = EXCLUDED.computed_at, messages = EXCLUDED.messages,
                         score = EXCLUDED.score, grade = EXCLUDED.grade, card = EXCLUDED.card,
-                        weak_spots = EXCLUDED.weak_spots
+                        weak_spots = EXCLUDED.weak_spots, event_types = EXCLUDED.event_types
                     """, (app["id"], version, days, self.now, card["messages"], card["score"],
                           card["grade"], json.dumps(card, default=str),
-                          json.dumps(card["weak_spots"])))
+                          json.dumps(card["weak_spots"]),
+                          json.dumps(event_type_counts(card["rows"]))))
                 written += 1
         return written
 

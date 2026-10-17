@@ -67,7 +67,7 @@ send today, so a field the game added since may show as missing.</p>
   <div class="tile" tabindex="0" data-tip="{{ TIPS.tile_messages }}"><div class="label">Messages</div><div class="value">{{ c.messages | n }}</div></div>
   <div class="tile" tabindex="0" data-tip="{{ TIPS.tile_sent }}"><div class="label">Event types sent</div><div class="value">{{ c.rows | length }}</div></div>
   <div class="tile" tabindex="0" data-tip="{{ TIPS.tile_scored }}"><div class="label">Event types scored</div><div class="value">{{ scored | length }}</div></div>
-  <div class="tile" tabindex="0" data-tip="{{ TIPS.tile_not_sent }}"><div class="label">Not sent (reference apps do)</div><div class="value">{{ c.not_sent | length }}</div></div>
+  <div class="tile" tabindex="0" data-tip="{{ TIPS.tile_not_sent }}"><div class="label">Not sent (reference apps do)</div><div class="value">{{ c.not_sent | length }}</div>{% if c.not_yet %}<div class="muted" style="font-size:.8rem">+ {{ c.not_yet | length }} not seen in this version yet</div>{% endif %}</div>
 </div>
 
 {% if c.unrecognised %}
@@ -228,13 +228,28 @@ send today, so a field the game added since may show as missing.</p>
   </div>
 </div>
 
+{% if c.not_yet %}
+<div class="panel">
+  <h2>Not seen in this version yet</h2>
+  <p class="sub">Earlier versions of this app sent these, but this version has not so far: usually a new version
+  with few messages yet. Not counted in the grade.</p>
+  <div class="scroll"><table>
+    <tr><th>Event type</th><th><span tabindex="0" data-tip="{{ TIPS.not_yet }}">Last sent by</span></th><th><span tabindex="0" data-tip="{{ TIPS.not_sent_reference }}">Reference apps sending it (messages profiled)</span></th></tr>
+    {% for n in c.not_yet %}
+    <tr><td><code>{{ n.event_type }}</code></td><td><a href="/card/{{ c.app_id }}?v={{ n.version | urlencode }}">{{ n.version }}</a> <span class="muted">(last seen {{ n.last_seen | day }})</span></td>
+      <td class="wrap">{% for g, k in n.reference | dictsort %}{{ g }} {{ k | n }}{% if not loop.last %}, {% endif %}{% endfor %}</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+{% endif %}
+
 {% if c.not_sent %}
 <div class="panel">
-  <h2>Not sent by this version</h2>
-  <p class="sub">Reference apps send these; this version sent none. Not counted in the grade:
+  <h2>Not sent by this application</h2>
+  <p class="sub">Reference apps send these; no version of this app with messages on file has. Not counted in the grade:
   many tools send only what they are built for. Listed in case one should be there.</p>
   <div class="scroll"><table>
-    <tr><th>Event type</th><th><span tabindex="0" data-tip="{{ TIPS.not_sent_reference }}">Reference apps sending it (messages on file)</span></th></tr>
+    <tr><th>Event type</th><th><span tabindex="0" data-tip="{{ TIPS.not_sent_reference }}">Reference apps sending it (messages profiled)</span></th></tr>
     {% for n in c.not_sent %}
     <tr><td><code>{{ n.event_type }}</code></td><td class="wrap">{% for g, k in n.reference | dictsort %}{{ g }} {{ k | n }}{% if not loop.last %}, {% endif %}{% endfor %}</td></tr>
     {% endfor %}
@@ -245,7 +260,7 @@ send today, so a field the game added since may show as missing.</p>
 <div class="panel">
   <h2>Basis</h2>
   <p class="sub">Layer weights: {% for k, w in c.weights.items() %}{{ k }} {{ w }}{% if not loop.last %}, {% endif %}{% endfor %}.
-  Event types are weighted by messages (low confidence counts half).
+  Event types are weighted by messages (below 30 messages, in proportion).
   Reference versions: {% for g, vs in c.reference_versions | dictsort %}{{ g }} {{ vs | join(", ") }}{% if not loop.last %}; {% endif %}{% endfor %}.
   <a href="/about">How scoring works</a>.</p>
 </div>

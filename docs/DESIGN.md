@@ -883,3 +883,12 @@ A review of the scoring maths (an outside opinion, checked against the code) rai
 
 - **Weak spots.** The overall score is weighted by message count, so a broken low-volume event type barely moves it. For example, journal messages at 99 and 100 market messages at 20 still give 98.9. The grade stays as it is, since it measures what listeners receive per message. Instead, every event type with at least `low_below` (30) messages that scores below C is recorded as a weak spot, both in the card and in a new `scorecards.weak_spots` column (migration 0012), so the lists need not read whole cards. Weak spots show under the card's header, beside the grade on the All apps and New apps lists, and in the picker's version list. Existing cards were filled in once from their own rows: 77 of 989 have one.
 - **Confidence ramp.** The low-confidence weight jumped from half to full at 30 messages. It is now `messages × min(1, messages / 30)`, a smooth ramp from 5 to 30 messages.
+
+## 32. "Not seen in this version yet" (2026-10-17)
+
+A card listed every event type the reference apps send but the version did not as "not sent by this version". For a new version with few messages, that read as if the app did not support event types its earlier versions sent; Outrider 2026.10.25 showed 16. Each card now records its event types with message counts in `scorecards.event_types` (migration 0013, filled once for existing cards from their rows). The card page splits the list when it is shown:
+
+- **Not seen in this version yet:** an earlier version with messages on file sent it. The page shows the highest such version, linked, and when it was last seen.
+- **Not sent by this application:** no version with messages on file has sent it. The "Not sent" tile counts only these, with the other count beside it.
+
+Neither is scored. The reference column is now labelled "messages profiled", since it shows the profile sample (up to 2,000 newest per app), not messages on file. The card's Basis line now describes the confidence ramp (§31) correctly.

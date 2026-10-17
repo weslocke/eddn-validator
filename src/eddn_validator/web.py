@@ -237,13 +237,36 @@ def load_all_apps() -> list[dict]:
     return out
 
 
+def split_not_sent(card: dict, others: list[tuple[str, dict, datetime]]) -> None:
+    """Split the card's not_sent list: event types an earlier version of the app sent go to
+    not_yet (with the highest such version and when it was last seen); the rest, never sent
+    by any version with messages on file, stay in not_sent."""
+    not_yet, never = [], []
+    for item in card.get("not_sent", []):
+        senders = [(v, last) for v, types, last in others if item["event_type"] in (types or {})]
+        if senders:
+            version, last = max(senders, key=lambda s: version_key(s[0]))
+            not_yet.append({**item, "version": version, "last_seen": last})
+        else:
+            never.append(item)
+    card["not_sent"], card["not_yet"] = never, not_yet
+
+
 def load_card(app_id: int, version: str) -> dict | None:
     # One card per version; the widest one wins while cards from the earlier per-range
     # scheme are still being replaced.
     with _connect() as conn:
         row = conn.execute("SELECT card FROM scorecards WHERE app_id = %s AND version = %s"
                            " ORDER BY range_days DESC LIMIT 1", (app_id, version)).fetchone()
-    return row[0] if row else None
+        if not row:
+            return None
+        others = conn.execute(
+            "SELECT s.version, s.event_types, v.last_seen FROM scorecards s"
+            "  JOIN app_versions v ON v.app_id = s.app_id AND v.version = s.version"
+            " WHERE s.app_id = %s AND s.version <> %s", (app_id, version)).fetchall()
+    card = row[0]
+    split_not_sent(card, others)
+    return card
 
 
 def load_versions(app_id: int) -> list[dict]:

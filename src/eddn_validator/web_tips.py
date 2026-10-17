@@ -31,7 +31,10 @@ STATIC = {
     "tile_messages": "Every message from this version on the card, all event types.",
     "tile_sent": "Kinds of event (schema, and journal event for journal/1) this version sent.",
     "tile_scored": "Kinds of event with enough messages (5 or more) to be scored.",
-    "tile_not_sent": "Kinds of event the reference apps send but this version did not. Listed, never counted against the grade.",
+    "tile_not_sent": "Kinds of event the reference apps send but no version of this app has sent (with messages on file). "
+                     "Listed, never counted against the grade.",
+    "not_yet": "An earlier version of this app sent this kind of event; this version has not yet. "
+               "Usually just a new version with few messages so far.",
     "gameversions": "Which game the data says it came from. Consumers of EDDN often filter on "
                     "this.\nLive 4.x: the current game.\nLegacy 3.x: the old Horizons 3.8 galaxy.\n"
                     "CAPI Live/Legacy: data from Frontier's online service.\n"
@@ -81,7 +84,8 @@ STATIC = {
     "behaviour_reference": "The highest rate among the reference apps (EDO Materials Helper "
                            "excluded) for this kind of event.",
     "not_sent_reference": "Reference apps that send this kind of event, with how many of their "
-                          "messages are on file.",
+                          "newest messages were profiled (up to 2,000 per app; EDMC counts its "
+                          "Windows and Linux builds separately).",
 }
 
 
