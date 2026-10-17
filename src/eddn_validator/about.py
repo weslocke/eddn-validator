@@ -7,6 +7,8 @@ from what is actually checked. Only the wording lives here.
 
 from __future__ import annotations
 
+import json
+
 from .config import Settings
 from .facts import BODY_STATIC
 
@@ -30,6 +32,8 @@ RULE_GROUPS: list[tuple[str, list[tuple[str, str]]]] = [
         ("GEN-006", "The game build is copied exactly as the game wrote it."),
         ("GEN-007", "The game version is not left blank."),
         ("GEN-008", "Online-service carrier data is not labelled with a game version from the player's files."),
+        ("GEN-009", "A game version from the player's files comes with its game build, and the other way round."),
+        ("GEN-009B", "Online-service market and shipyard data is not labelled with a build from the player's files."),
         ("GEN-010", "The app's name is filled in."),
         ("GEN-011", "The app's version is filled in."),
         ("GEN-011B", "The app's version looks like a version number."),
@@ -42,7 +46,7 @@ RULE_GROUPS: list[tuple[str, list[tuple[str, str]]]] = [
         ("GEN-033", "A star system's name matches its system ID (for names the game generates)."),
         ("GEN-035", "A planet or moon belongs to the star system it is reported in."),
         ("GEN-032", "No made-up 0, 0, 0 position for any system other than Sol."),
-        ("GEN-043", "The market ID belongs to a real station (not test data, not a damaged number)."),
+        ("GEN-043", "The market ID belongs to a real station (not test data, not a damaged or negative number)."),
         ("GEN-042", "Data from a temporary mission instance, not the permanent galaxy."),
         ("GEN-041", "The game's own \"no market here\" value."),
     ]),
@@ -56,15 +60,15 @@ RULE_GROUPS: list[tuple[str, list[tuple[str, str]]]] = [
         ("GEN-025", "The Odyssey flag is left out for the old Legacy game, which has no Odyssey."),
         ("GEN-026", "The Horizons and Odyssey flags make sense together."),
         ("GEN-027", "The Horizons flag is included where the format allows it."),
-        ("GEN-027J", "Journal messages include the Horizons and Odyssey flags."),
-        ("JNL-001", "Codex discoveries are sent on the codex channel, not the general one."),
+        ("GEN-027J", "Journal messages include the Horizons flag (and the Odyssey flag where the game writes one)."),
+        ("JNL-001", "Codex discoveries are better sent on the codex channel than the general one."),
     ]),
     ("Markets, outfitting and shipyards", [
         ("COM-001", "Commodity names are cleaned of the game's internal codes."),
         ("COM-002", "Empty lists are left out instead of sent empty."),
         ("COM-003", "Limpets are not listed as a commodity."),
         ("COM-005", "Market data from the online service includes its status flags."),
-        ("COM-006", "A station with a Colony economy is marked as Horizons."),
+        ("COM-006", "Online-service market data from a station with a Colony economy is marked as Horizons."),
         ("COM-007", "Each commodity is listed once."),
         ("OUT-001", "The planetary approach suite, which must always be removed, is not listed."),
         ("OUT-003", "Each module is listed once."),
@@ -200,10 +204,32 @@ RULE_FAMILIES = {
 }
 
 
+LEFT_OUT = "(left out)"   # an example value meaning "remove this field" (config/rule_details.yaml)
+
+
+def example_schema(rule_cfg: dict, example: dict) -> str:
+    """The schema an example is sent on: its own, else the rule's first, else journal/1."""
+    schemas = rule_cfg.get("schemas", "*")
+    return example.get("schema") or ("journal/1" if schemas == "*" else schemas[0])
+
+
+def _example(rule_cfg: dict, example: dict | None) -> dict | None:
+    """An example as the page shows it: the schema, and each changed field with its value
+    (None for a field left out)."""
+    if example is None:
+        return None
+    schema = example_schema(rule_cfg, example) + ("/test" if example.get("test") else "")
+    rows = [(f"header.{k}" if part == "header" else k,
+             None if v == LEFT_OUT else json.dumps(v, ensure_ascii=False))
+            for part in ("header", "message") for k, v in (example.get(part) or {}).items()]
+    return {"schema": schema, "rows": rows}
+
+
 def technical_context(settings: Settings) -> dict:
     """Every rule in config/rules.yaml, exactly as configured, plus the scoring parameters."""
     scoring = settings.load_yaml("scoring.yaml")
     rules_cfg = settings.load_yaml("rules.yaml").get("rules", {})
+    details = settings.load_yaml("rule_details.yaml") or {}
     sev_w = scoring["severity_weights"]
     families: dict[str, list[dict]] = {}
     off = []
@@ -212,11 +238,19 @@ def technical_context(settings: Settings) -> dict:
         row = {"id": rule_id, "severity": cfg["severity"], "weight": sev_w.get(cfg["severity"], 0),
                "schemas": "all" if schemas == "*" else ", ".join(schemas),
                "title": cfg.get("title", ""), "source": cfg.get("source", "")}
+        d = details.get(rule_id) or {}
+        row.update(how=d.get("how", ""), fails=_example(cfg, d.get("fails")),
+                   passes=_example(cfg, d.get("passes")))
         if not cfg.get("enabled", True):
             off.append({**row, "why": SWITCHED_OFF.get(rule_id, "")})
             continue
         families.setdefault(RULE_FAMILIES.get(rule_id.split("-")[0], "Other"), []).append(row)
     order = list(RULE_FAMILIES.values()) + ["Other"]
     groups = [(name, families[name]) for name in order if name in families]
+    from .facts import POS_TOLERANCE, REL_TOLERANCE
+    from .pairing import MARKET_WINDOW, STATION_FRESH
     return {"groups": groups, "off": off, "total": sum(len(r) for _, r in groups),
-            "scoring": scoring, "severity_weights": sev_w}
+            "scoring": scoring, "severity_weights": sev_w, "body_fields": BODY_STATIC,
+            "pairing": {"station_fresh_days": STATION_FRESH.days,
+                        "market_window_minutes": int(MARKET_WINDOW.total_seconds() // 60),
+                        "pos_tolerance": f"1/{round(1 / POS_TOLERANCE)}", "rel_tolerance": REL_TOLERANCE}}

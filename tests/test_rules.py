@@ -134,6 +134,15 @@ CASES = [
     ("GEN-032", mutate("navroute/1", lambda m: m["Route"][1].update(StarPos=[0, 0, 0]))),
     ("GEN-034", mutate("journal/1", lambda m: m.update(Factions=[{"Name": "F", "MyReputation": 5.0}]))),
     ("JNL-001", mutate("journal/1", lambda m: m.update(event="CodexEntry"))),
+    ("GEN-027J", mutate("journal/1", lambda m: m.pop("horizons"))),
+    ("GEN-009", envelope("journal/1", gamebuild="")),
+    ("GEN-009", envelope("journal/1", gameversion="", gamebuild="r311234/r0 ")),
+    ("GEN-009B", {**envelope("commodity/3"),
+                  "header": {**envelope("commodity/3")["header"], "gamebuild": "r311234/r0 "}}),
+    ("GEN-043", mutate("journal/1", lambda m: m.update(event="Docked", MarketID=-579228928, StationName="X"))),
+    ("GEN-041", mutate("journal/1", lambda m: m.update(event="Docked", MarketID=18446744073709552000, StationName="X"))),
+    ("COM-003", mutate("commodity/3", lambda m: m["commodities"][0].update(name="$drones_name;"))),
+    ("DCK-001", mutate("dockinggranted/1", lambda m: m.update(StationName="  "))),
     ("COM-001", mutate("commodity/3", lambda m: m["commodities"][0].update(name="$gold_name;"))),
     ("COM-002", mutate("commodity/3", lambda m: m.update(prohibited=[]), gameversion="4.2.1.0", gamebuild="r311234/r0 ")),
     ("COM-003", mutate("commodity/3", lambda m: m["commodities"][0].update(name="Drones"))),
@@ -304,3 +313,52 @@ def test_moving_stations_by_type_then_range():
     assert not moving_station(4_200_000_000, "SurfaceStation")
     assert moving_station(3_850_000_000, None)                      # unknown type: range decides
     assert not moving_station(128_016_640, None)
+
+
+def test_review_scoping_2026_10_17():
+    # GEN-043 skips /test schemas; COM-006 applies to CAPI markets only; GEN-009B not for CAPI journal.
+    test = mutate("journal/1", lambda m: m.update(event="Docked", MarketID=42, StationName="Test Port"))
+    test["$schemaRef"] += "/test"
+    assert "GEN-043" not in ids(test)
+    journal_market = mutate("commodity/3", lambda m: m.update(horizons=False, odyssey=False,
+                            economies=[{"name": "Colony", "proportion": 1.0}]),
+                            gameversion="4.2.1.0", gamebuild="r311234/r0 ")
+    assert "COM-006" not in ids(journal_market)
+    assert "GEN-009B" not in ids(envelope("journal/1", gameversion="CAPI-Live-journal", gamebuild="r311234/r0 "))
+
+
+# --- the technical page's examples (config/rule_details.yaml) run through the real checks ----
+
+DETAILS = yaml.safe_load((Path(__file__).parents[1] / "config" / "rule_details.yaml").read_text())
+CLEAN["blackmarket/1"] = {"timestamp": TS, "systemName": "Sol", "stationName": "X", "marketId": 128016640,
+                          "name": "gold", "sellPrice": 1, "prohibited": False}
+
+
+def example_envelope(rule_id, example):
+    from eddn_validator.about import LEFT_OUT, example_schema
+    schema = example_schema(CONFIG["rules"][rule_id], example)
+    env = envelope(schema)
+    if example.get("test"):
+        env["$schemaRef"] += "/test"
+    for part in ("header", "message"):
+        for key, value in (example.get(part) or {}).items():
+            if value == LEFT_OUT:
+                env[part].pop(key, None)
+            else:
+                env[part][key] = copy.deepcopy(value)
+    return env
+
+
+@pytest.mark.parametrize("rule_id", sorted(DETAILS))
+def test_rule_details_examples(rule_id):
+    entry = DETAILS[rule_id]
+    rule = [r for r in ALL_RULES if r.id == rule_id]
+    assert rule and entry.get("how") and "fails" in entry
+    assert rule_id in {f.rule for f in evaluate(rule, example_envelope(rule_id, entry["fails"]))}
+    if "passes" in entry:
+        assert rule_id not in {f.rule for f in evaluate(rule, example_envelope(rule_id, entry["passes"]))}
+
+
+def test_every_enabled_rule_has_details():
+    enabled = {k for k, v in CONFIG["rules"].items() if v.get("enabled", True)}
+    assert enabled == set(DETAILS)

@@ -9,6 +9,7 @@ the browser, so typed text never reaches the server.
 
 from __future__ import annotations
 
+import logging
 import re
 import secrets
 from urllib.parse import quote
@@ -17,6 +18,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import psycopg
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from markupsafe import Markup, escape
@@ -31,6 +33,8 @@ from .config import RO_ROLE, Settings
 from .web_tips import (BEHAVIOUR_TIPS, GAMEVERSION_TIPS, PAIR_TIPS, SEVERITY_TIPS, VALUE_TIPS,
                        annotate)
 from .web_tips import STATIC as TIPS
+
+log = logging.getLogger(__name__)
 
 CACHE_SECONDS = 60
 settings = Settings.from_env()
@@ -387,11 +391,40 @@ def all_apps(request: Request):
         "apps": apps, "nonce": request.state.nonce})
 
 
+def reference_rule_rates() -> dict:
+    """How often each reference group fails each rule: messages failing over messages profiled,
+    across every event type the rule applies to. A rule maps to {group: rate}, with None for a
+    group that sends none of the rule's schemas."""
+    rules_cfg = settings.load_yaml("rules.yaml").get("rules", {})
+    with _connect() as conn:
+        rows = conn.execute("SELECT event_type, ref_group, n, profile->'rules' FROM ref_profiles"
+                            " WHERE subtype = '*'").fetchall()
+        built = conn.execute("SELECT max(built_at) FROM ref_profiles").fetchone()[0]
+    groups = sorted({g for _, g, _, _ in rows})
+    rates: dict[str, dict[str, float | None]] = {}
+    for rule_id, cfg in rules_cfg.items():
+        schemas = cfg.get("schemas", "*")
+        fails: dict[str, float] = dict.fromkeys(groups, 0.0)
+        seen: dict[str, int] = dict.fromkeys(groups, 0)
+        for event_type, group, n, rule_rates in rows:
+            if schemas == "*" or event_type.split(":")[0] in schemas:
+                seen[group] += n
+                fails[group] += n * (rule_rates or {}).get(rule_id, 0.0)
+        rates[rule_id] = {g: (fails[g] / seen[g] if seen[g] else None) for g in groups}
+    return {"rates": rates, "groups": groups, "built": built}
+
+
 @app.get("/about/technical", response_class=HTMLResponse)
 def about_technical(request: Request):
     from .about import technical_context
     data = cache.get(("about", "technical"), lambda: technical_context(settings))
-    return templates.TemplateResponse(request, "about_technical.html", {**data, "nonce": request.state.nonce})
+    try:
+        ref = cache.get(("about", "technical", "reference"), reference_rule_rates)
+    except psycopg.Error:
+        log.exception("reference rule rates unavailable")
+        ref = {"rates": {}, "groups": [], "built": None}
+    return templates.TemplateResponse(request, "about_technical.html",
+                                      {**data, "ref": ref, "nonce": request.state.nonce})
 
 
 @app.get("/about/{layer}", response_class=HTMLResponse)

@@ -17,6 +17,23 @@
   .formula { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .86rem;
              background: var(--code-bg); padding: 8px 12px; border-radius: 6px; display: block; margin-top: 8px;
              white-space: pre-wrap; }
+  td.def details > summary { cursor: pointer; list-style: none; }
+  td.def details > summary::-webkit-details-marker { display: none; }
+  td.def details > summary::before { content: "▸ "; color: var(--muted); }
+  td.def details[open] > summary::before { content: "▾ "; }
+  .rule-more { margin-top: 8px; display: grid; gap: 8px; font-size: .88rem; }
+  .rule-more p { margin: 0; }
+  .rule-more .ex { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 10px; }
+  .rule-more .ex .k { color: var(--text-2); }
+  .rule-more .ex code { font-size: .82rem; }
+  .rule-more .lbl { font-weight: 600; font-size: .8rem; color: var(--text-2); text-transform: uppercase;
+                    letter-spacing: .04em; }
+  .rule-more .left-out { color: var(--muted); font-style: italic; }
+  .refrates { display: flex; flex-wrap: wrap; gap: 4px 14px; font-variant-numeric: tabular-nums; }
+  .toggle-all { font: inherit; font-size: .85rem; padding: 3px 10px; border-radius: 6px; cursor: pointer;
+                border: 1px solid var(--line); background: var(--panel); color: var(--text); }
+  ul.tight { margin: 6px 0 0; padding-left: 20px; max-width: 820px; }
+  ul.tight li { margin: 3px 0; }
 {% endblock %}
 {% block content %}
 <div class="prose">
@@ -61,7 +78,39 @@ A message breaking several rules counts once per rule in the Rules layer, and on
 </table></div>
 <p class="muted">Fields never value-checked (open-ended): {% for f in sc["values"].open_fields %}<code>{{ f }}</code>{% if not loop.last %} {% endif %}{% endfor %}</p>
 
+<h2>How pairing compares</h2>
+<p>Pairing compares what an app says about a place with what the reference apps said about the same place. One
+record per system, body and station is kept, built only from reference apps' messages. A message is paired
+only when that record exists. Every field compared counts, and one mismatch makes the message a mismatched pair.</p>
+<ul class="tight">
+  <li><strong>System</strong> (any message with a SystemAddress): the system name must match exactly, and StarPos to within
+    {{ pairing.pos_tolerance }} ly on each axis (positions are on a 1/32 ly grid).</li>
+  <li><strong>NavRoute</strong>: the same check for every hop on the route.</li>
+  <li><strong>Body</strong> (journal Scan, live game only), matched on SystemAddress and BodyID: BodyName exactly, plus each of
+    these fields the message carries, with numbers equal to within one part in a million:
+    {% for f in body_fields %}<code>{{ f }}</code>{% if not loop.last %} {% endif %}{% endfor %}.</li>
+  <li><strong>Station</strong> (live game only), matched on MarketID: the name (ignoring letter case) and type, only against a record
+    from the last {{ pairing.station_fresh_days }} days, since stations get renamed and rebuilt. Also the system the station is in,
+    at any age, except for stations that move: fleet carriers, megaships and PowerPlay Stronghold Carriers.
+    For a station whose type is unknown, the MarketID range decides.</li>
+  <li><strong>Market</strong> (commodity/3, live game only): compared with a reference app's snapshot of the same market, from the
+    same source (CAPI or journal), taken within {{ pairing.market_window_minutes }} minutes. The set of commodities must match,
+    and each commodity's buy and sell price.</li>
+</ul>
+<p>Legacy-galaxy messages are paired on systems only, as the galaxy's stars are the same in both and everything else may differ.
+System, NavRoute, body and station pairs are "hard" pairs and count in full. Market pairs count half, because prices change
+from minute to minute.</p>
+
+<h2>What the gateway already rejects</h2>
+<p>EDDN's gateway checks every message against its schema (JSON Schema) before relaying it. A message with a wrong type,
+a missing required field or a forbidden key never reaches the relay, so no rule here checks for one. The one exception is a
+list the schema marks unique: the gateway now accepts a repeated item with a warning, so GEN-040 checks for it.</p>
+
 <h2>Rules ({{ total }} active)</h2>
+<p>Click a rule's definition to see exactly what it checks, an example that fails it and one that passes, and how often each
+reference app fails it.{% if ref.built %} Reference rates are from the reference profiles built
+{{ ref.built.strftime("%Y-%m-%d %H:%M") }} UTC.{% endif %}
+<button type="button" class="toggle-all" id="toggle-all">Expand all</button></p>
 {% for name, rows in groups %}
 <h3>{{ name }}</h3>
 <div class="scroll"><table class="rules">
@@ -72,7 +121,19 @@ A message breaking several rules counts once per rule in the Rules layer, and on
     <td>{% if link %}<a href="{{ link.url }}" target="_blank" rel="noopener noreferrer" data-tip="{{ link.tip }}"><code>{{ r.id }}</code></a>{% else %}<code>{{ r.id }}</code>{% endif %}</td>
     <td><span class="sev {{ r.severity }}">{{ {"error": "serious", "warning": "minor", "info": "note"}.get(r.severity, r.severity) }}</span><br><span class="muted">w = {{ r.weight }}</span></td>
     <td class="sch">{{ r.schemas }}</td>
-    <td class="def">{{ r.title }}</td>
+    <td class="def"><details><summary>{{ r.title }}</summary>
+      <div class="rule-more">
+        {% if r.how %}<p>{{ r.how }}</p>{% endif %}
+        {% for label, ex in (("Fails", r.fails), ("Passes", r.passes)) if ex %}
+        <div><div class="lbl">{{ label }} · <code>{{ ex.schema }}</code></div>
+          {% if ex.rows %}<div class="ex">{% for k, v in ex.rows %}<span class="k"><code>{{ k }}</code></span>{% if v is none %}<span class="left-out">left out</span>{% else %}<span><code>{{ v }}</code></span>{% endif %}{% endfor %}</div>
+          {% else %}<div class="muted">any message</div>{% endif %}
+        </div>
+        {% endfor %}
+        {% set rates = ref.rates.get(r.id) %}
+        {% if rates %}<div><div class="lbl">Reference apps failing it</div>
+          <div class="refrates">{% for g in ref.groups %}<span>{{ g }} {% if rates[g] is none %}<span class="muted">no data</span>{% else %}{{ "%.2f" | format(100 * rates[g]) }}%{% endif %}</span>{% endfor %}</div></div>{% endif %}
+      </div></details></td>
     <td class="src">{{ r.source | source_links }}</td>
   </tr>
   {% endfor %}
@@ -95,4 +156,17 @@ A message breaking several rules counts once per rule in the Rules layer, and on
 </table></div>
 {% endif %}
 </div>
+{% endblock %}
+{% block script %}
+<script nonce="{{ nonce }}">
+(function () {
+  var button = document.getElementById("toggle-all");
+  if (!button) return;
+  button.addEventListener("click", function () {
+    var open = button.textContent === "Expand all";
+    document.querySelectorAll("table.rules td.def details").forEach(function (d) { d.open = open; });
+    button.textContent = open ? "Collapse all" : "Expand all";
+  });
+})();
+</script>
 {% endblock %}

@@ -166,6 +166,7 @@ def first_key(value: object, predicate: Callable[[str], bool]) -> str | None:
 
 
 JOURNAL_GV = re.compile(r"^\d+(\.\d+)+")
+JOURNAL_BUILD = re.compile(r"^r\d+/r\d+\s*$")
 CAPI_GV = re.compile(r"^CAPI-(?:(Live|Legacy)-)?(market|shipyard|journal)$")
 CAPI_ENDPOINT = {
     "commodity/3": "market",
@@ -285,6 +286,30 @@ def capi_schema_with_journal_version(ctx: Ctx) -> str | None:
     return None
 
 
+@check("GEN-009")
+def journal_version_without_build(ctx: Ctx) -> str | None:
+    # Fileheader and LoadGame carry `build` beside `gameversion` in every client that writes one
+    # (Dev:291-293), so a journal value with the other left empty means the sender dropped it.
+    gb = ctx.gamebuild
+    if not isinstance(gb, str):
+        return None
+    if JOURNAL_GV.match(ctx.gv) and not gb.strip():
+        return f"journal gameversion {ctx.gv!r} with an empty gamebuild"
+    if ctx.gv == "" and JOURNAL_BUILD.match(gb):
+        return f"journal gamebuild {gb!r} with an empty gameversion"
+    return None
+
+
+@check("GEN-009B")
+def capi_with_journal_build(ctx: Ctx) -> str | None:
+    # CAPI-*-journal is excluded: there the journal's build is the legitimate source value.
+    m = CAPI_GV.match(ctx.gv)
+    gb = ctx.gamebuild
+    if m and m.group(2) in ("market", "shipyard") and isinstance(gb, str) and JOURNAL_BUILD.match(gb):
+        return f"journal build {gb!r} sent as gamebuild with {ctx.gv!r}"
+    return None
+
+
 @check("GEN-010")
 def software_name_empty(ctx: Ctx) -> str | None:
     name = ctx.header.get("softwareName")
@@ -389,8 +414,10 @@ def horizons_absent(ctx: Ctx) -> str | None:
 
 @check("GEN-027J")
 def flags_absent_journal(ctx: Ctx) -> str | None:
-    if "horizons" not in ctx.message and "odyssey" not in ctx.message:
-        return "neither horizons nor odyssey sent"
+    # LoadGame carries Horizons in every client (Dev:378-419); only Odyssey can be absent (3.8).
+    if "horizons" not in ctx.message:
+        return ("horizons flag absent (odyssey sent without it)" if "odyssey" in ctx.message
+                else "neither horizons nor odyssey sent")
     return None
 
 
@@ -496,9 +523,11 @@ def operations_instance(ctx: Ctx) -> str | None:
 
 @check("GEN-043")
 def unreal_market_id(ctx: Ctx) -> str | None:
+    if ctx.is_test:   # the test schemas are where made-up IDs belong (Dev:92-102)
+        return None
     for key in ("MarketID", "marketId"):
         value = ctx.message.get(key)
-        if isinstance(value, int) and not isinstance(value, bool) and 0 <= value < 127_000_000:
+        if isinstance(value, int) and not isinstance(value, bool) and value < 127_000_000:
             return (f"{key} {value} belongs to no real station: test data on a live schema, or an ID "
                     "damaged in a 32-bit field")
     return None
@@ -507,8 +536,12 @@ def unreal_market_id(ctx: Ctx) -> str | None:
 @check("GEN-041")
 def no_market_sentinel(ctx: Ctx) -> str | None:
     for key in ("MarketID", "marketId"):
-        if ctx.message.get(key) == NO_MARKET:
+        value = ctx.message.get(key)
+        if value == NO_MARKET:
             return f"{key} is the game's no-market value 2^64-1"
+        # The same value rounded by a sender's 64-bit float (JSON in JavaScript): no real ID is near 2^63.
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 2 ** 63:
+            return f"{key} is the game's no-market value 2^64-1, rounded by the sender to {value}"
     return None
 
 
@@ -516,7 +549,7 @@ def no_market_sentinel(ctx: Ctx) -> str | None:
 
 @check("JNL-001")
 def codexentry_on_journal(ctx: Ctx) -> str | None:
-    return "CodexEntry sent on journal/1; use codexentry/1" if ctx.event == "CodexEntry" else None
+    return "CodexEntry sent on journal/1; codexentry/1 is the specific schema" if ctx.event == "CodexEntry" else None
 
 
 @check("COM-001")
@@ -541,7 +574,9 @@ def commodity_empty_lists(ctx: Ctx) -> str | None:
 @check("COM-003")
 def commodity_limpets(ctx: Ctx) -> str | None:
     for item in _items(ctx.message.get("commodities")):
-        if isinstance(item, dict) and str(item.get("name", "")).lower() == "drones":
+        name = str(item.get("name", "")).lower().removeprefix("$").removesuffix("_name;") \
+            if isinstance(item, dict) else ""
+        if name == "drones":
             return "limpets (drones) included; NonMarketable items must be skipped"
     return None
 
@@ -563,6 +598,10 @@ def commodity_capi_without_status_flags(ctx: Ctx) -> str | None:
 
 @check("COM-006")
 def commodity_colony_not_horizons(ctx: Ctx) -> str | None:
+    # A CAPI fallback (commodity-README:88-94): a journal-sourced market takes horizons from
+    # LoadGame, and so may a CAPI sender while the game is running.
+    if not ctx.gv.startswith("CAPI-"):
+        return None
     colony = any(isinstance(e, dict) and e.get("name") == "Colony"
                  for e in _items(ctx.message.get("economies")))
     if colony and ctx.message.get("horizons") is False:
@@ -681,7 +720,8 @@ def body_signals_empty(ctx: Ctx) -> str | None:
 
 @check("DCK-001")
 def docking_station_name_empty(ctx: Ctx) -> str | None:
-    return "StationName is empty" if ctx.message.get("StationName") == "" else None
+    name = ctx.message.get("StationName")
+    return "StationName is empty" if isinstance(name, str) and not name.strip() else None
 
 
 @check("FCJ-001")

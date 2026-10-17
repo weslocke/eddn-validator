@@ -34,9 +34,9 @@ rules:
     title: CAPI gameversion should say Live or Legacy (CAPI-Live-market, not CAPI-market)
     source: Dev:258-271
   GEN-004:
-    severity: error
+    severity: warning   # a SHOULD (Dev:258-259); the MUST NOT beside it is GEN-008 / GEN-009B
     schemas: "*"
-    title: CAPI gameversion endpoint must match the schema (market, shipyard, journal)
+    title: CAPI gameversion endpoint should match the schema (market, shipyard, journal)
     source: Dev:258-271
   GEN-005:
     severity: error
@@ -58,6 +58,16 @@ rules:
     schemas: [fcmaterials_capi/1]
     title: CAPI-sourced data must not carry a journal gameversion
     source: Dev:260-262
+  GEN-009:
+    severity: warning
+    schemas: "*"
+    title: a journal gameversion and gamebuild come together (one sent, the other left empty)
+    source: Dev:238-240, 277-278, 291-293
+  GEN-009B:
+    severity: error
+    schemas: [commodity/3, outfitting/2, outfitting/3, shipyard/2, fcmaterials_capi/1]
+    title: CAPI market or shipyard data must not carry the journal's build as gamebuild
+    source: Dev:258-262, 277-280, 296-299
   GEN-010:
     severity: warning
     schemas: "*"
@@ -124,7 +134,7 @@ rules:
   GEN-027J:
     severity: warning
     schemas: [journal/1]
-    title: journal/1 messages must carry the horizons/odyssey flags
+    title: journal/1 messages must carry the horizons flag (odyssey too, where the game writes it)
     source: journal-README:72-80
   GEN-030:
     severity: error
@@ -169,7 +179,7 @@ rules:
   GEN-043:
     severity: warning
     schemas: "*"
-    title: MarketID below any real station (test data on a live schema, or an ID damaged in a 32-bit field)
+    title: MarketID below any real station, or negative (test data on a live schema, or an ID damaged in a 32-bit field)
     source: Spansh MarketID ranges (real stations start at 128,000,000); Dev:92-102
   GEN-041:
     severity: info
@@ -179,9 +189,9 @@ rules:
 
   # --- per schema -----------------------------------------------------------------
   JNL-001:
-    severity: warning
+    severity: info   # journal/1 still lists CodexEntry; the README only points to codexentry/1
     schemas: [journal/1]
-    title: CodexEntry belongs on codexentry/1
+    title: CodexEntry is better sent on codexentry/1
     source: journal-README:24-25
   COM-001:
     severity: error
@@ -216,8 +226,8 @@ rules:
   COM-006:
     severity: warning
     schemas: [commodity/3]
-    title: a Colony economy means horizons must be true
-    source: commodity-README:93-94
+    title: CAPI markets with a Colony economy must be marked horizons (when the game client's LoadGame is not available)
+    source: commodity-README:88-94
   COM-007:
     severity: warning
     schemas: [commodity/3]
@@ -261,7 +271,7 @@ rules:
     severity: info
     schemas: [navroute/1]
     title: an empty Route carries no data
-    source: navroute-README:22-27
+    source: implied
   NAV-002:
     severity: warning
     schemas: [navroute/1]
@@ -316,6 +326,9 @@ rules:
     severity: error
     schemas: [fcmaterials_capi/1]
     title: every locName must be removed
+    # The schema already rejects locName inside well-formed purchases/sales entries (v1.0.json
+    # :78/84, :114/123), so this can only fire on locName elsewhere under Items, such as a whole
+    # /market payload dumped there (README:22-26).
     source: fcmaterials_capi-README:35, 46
   FCC-004:
     severity: warning

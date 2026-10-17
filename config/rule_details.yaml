@@ -1,0 +1,328 @@
+# What each rule checks, exactly, with a failing and a passing example (the technical page,
+# /about/technical). Each example is a change to a clean message of the rule's schema:
+#
+#   schema  : the schema the example is sent on (default: the rule's first schema, or journal/1)
+#   test    : true sends it on the schema's /test version
+#   header  : header fields to set
+#   message : top-level message fields to set
+#
+# A value of "(left out)" removes the field. tests/test_rule_details.py runs every example
+# through the real checks, so these cannot drift from the code: "fails" must raise the rule,
+# "passes" must not. Disabled rules need no entry.
+
+GEN-001:
+  how: "Fails when the header has no gameversion key at all. An empty string passes here; it is the documented fallback when the sender has no source for it (GEN-007 notes it)."
+  fails: {header: {gameversion: (left out)}}
+  passes: {header: {gameversion: ""}}
+
+GEN-002:
+  how: "Fails when the header has no gamebuild key at all. An empty string passes here."
+  fails: {header: {gamebuild: (left out)}}
+  passes: {header: {gamebuild: ""}}
+
+GEN-003:
+  how: "Fails when gameversion is filled in but is neither a game version (digits and dots, such as 4.0.0.1904) nor a CAPI value (CAPI-Live-market, CAPI-Legacy-shipyard, CAPI-Live-journal and so on). A value that is not a string fails too."
+  fails: {header: {gameversion: Odyssey}}
+  passes: {header: {gameversion: 4.0.0.1904}}
+
+GEN-003B:
+  how: "A CAPI value without Live or Legacy (CAPI-market, CAPI-shipyard, CAPI-journal), the older form that does not say which galaxy the data is from. A note."
+  fails: {schema: commodity/3, header: {gameversion: CAPI-market}}
+  passes: {schema: commodity/3, header: {gameversion: CAPI-Live-market}}
+
+GEN-004:
+  how: "For a CAPI gameversion, the endpoint word must match the schema. Use market for commodity/3 and fcmaterials_capi/1, shipyard for shipyard/2 and outfitting, and journal for every journal-based schema. fcmaterials_journal/1 is left to FCJ-001."
+  fails: {schema: commodity/3, header: {gameversion: CAPI-Live-shipyard}}
+  passes: {schema: commodity/3, header: {gameversion: CAPI-Live-market}}
+
+GEN-005:
+  how: "gamebuild may copy gameversion only when that is a CAPI value. Fails when gamebuild holds a CAPI value that differs from gameversion, or when it copies a journal gameversion such as 4.0.0.1475."
+  fails: {header: {gameversion: 4.0.0.1475, gamebuild: 4.0.0.1475}}
+  passes: {header: {gameversion: 4.0.0.1475, gamebuild: "r292165/r0 "}}
+
+GEN-006:
+  how: "A journal build (r123456/r0) without its trailing space. The game writes the build with one, so its absence means the sender changed the value. A note."
+  fails: {header: {gamebuild: r332841/r0}}
+  passes: {header: {gamebuild: "r332841/r0 "}}
+
+GEN-007:
+  how: "gameversion is an empty string. That is allowed only when the sender has no source for it, so it is a note."
+  fails: {header: {gameversion: ""}}
+  passes: {header: {gameversion: 4.4.1.1}}
+
+GEN-008:
+  how: "On fcmaterials_capi/1, which only carries CAPI data, gameversion is a journal version (such as 4.4.1.0) and not a CAPI value."
+  fails: {header: {gameversion: 4.4.1.0}}
+  passes: {header: {gameversion: CAPI-Live-market}}
+
+GEN-009:
+  how: "gameversion is a journal version but gamebuild is empty, or gameversion is empty but gamebuild is a journal build. The journal's Fileheader and LoadGame events carry both together, so sending one without the other means the sender dropped it."
+  fails: {header: {gameversion: 4.4.1.1, gamebuild: ""}}
+  passes: {header: {gameversion: 4.4.1.1, gamebuild: "r332841/r0 "}}
+
+GEN-009B:
+  how: "CAPI market or shipyard data (gameversion CAPI-…-market or CAPI-…-shipyard) whose gamebuild is a journal build such as r311234/r0. CAPI-…-journal data is not checked; there the journal's build is the right value."
+  fails: {header: {gameversion: CAPI-Live-market, gamebuild: "r311234/r0 "}}
+  passes: {header: {gameversion: CAPI-Live-market, gamebuild: ""}}
+
+GEN-010:
+  how: "softwareName is missing, not a string, or blank."
+  fails: {header: {softwareName: "  "}}
+  passes: {header: {softwareName: TestApp}}
+
+GEN-011:
+  how: "softwareVersion is missing, not a string, or blank."
+  fails: {header: {softwareVersion: ""}}
+  passes: {header: {softwareVersion: 1.2.3}}
+
+GEN-011B:
+  how: "softwareVersion is filled in but is not a version number. A version is two to four numbers separated by dots, with an optional leading v and an optional suffix (1.2.3, v5.11.2, 2.0.0-beta1). A note."
+  fails: {header: {softwareVersion: latest}}
+  passes: {header: {softwareVersion: 5.11.2}}
+
+GEN-014:
+  how: "On a live schema (not /test), gameversion or gamebuild contains \"beta\" or \"alpha\". Data from test clients belongs on the /test schemas, which are not checked."
+  fails: {header: {gameversion: 4.5.0.0 Beta}}
+  passes: {test: true, header: {gameversion: 4.5.0.0 Beta}}
+
+GEN-014B:
+  how: "On a live schema, the gameversion and gamebuild pair is a known beta client that Frontier no longer labels as beta, for example 4.4.1.0 with r332668/r0. The list comes from EDDiscovery's release table."
+  fails: {header: {gameversion: 4.4.1.0, gamebuild: "r332668/r0 "}}
+  passes: {header: {gameversion: 4.4.1.1, gamebuild: "r332841/r0 "}}
+
+GEN-020:
+  how: "Any key ending in _Localised, at any depth of the message. These hold text translated into the player's language, and EDDN wants only the game's internal names."
+  fails: {schema: scanorganic/1, message: {Genus_Localised: Bacterium}}
+  passes: {schema: scanorganic/1, message: {Genus: $Codex_Ent_Bacterial_Genus_Name;}}
+
+GEN-021:
+  how: "The message timestamp does not end in Z or +00:00 (for fsssignaldiscovered/1, each signal's timestamp is checked too)."
+  fails: {message: {timestamp: "2026-10-13T08:00:00-04:00"}}
+  passes: {message: {timestamp: "2026-10-13T12:00:00Z"}}
+
+GEN-022:
+  how: "The event's timestamp is more than 5 minutes after the moment the EDDN gateway received the message. Being a whole number of hours ahead usually means local time labelled as UTC."
+  fails: {header: {gatewayTimestamp: "2026-10-13T12:00:05Z"}, message: {timestamp: "2026-10-13T16:00:05Z"}}
+  passes: {header: {gatewayTimestamp: "2026-10-13T12:00:05Z"}, message: {timestamp: "2026-10-13T12:00:00Z"}}
+
+GEN-023:
+  how: "The gateway received the message more than an hour after the event. A note. Sending old journal entries is allowed, but what they describe may have changed since."
+  fails: {header: {gatewayTimestamp: "2026-10-13T12:00:05Z"}, message: {timestamp: "2026-10-13T10:30:00Z"}}
+  passes: {header: {gatewayTimestamp: "2026-10-13T12:00:05Z"}, message: {timestamp: "2026-10-13T11:59:00Z"}}
+
+GEN-025:
+  how: "An odyssey flag is sent with a Legacy gameversion (3.x, or CAPI-Legacy-…). Legacy clients' LoadGame has no Odyssey key, so the flag must be left out."
+  fails: {header: {gameversion: 3.8.0.407, gamebuild: "r269979/r0 "}, message: {odyssey: false}}
+  passes: {header: {gameversion: 3.8.0.407, gamebuild: "r269979/r0 "}, message: {odyssey: (left out)}}
+
+GEN-026:
+  how: "odyssey is true while horizons is false. The game never writes that pair, so the sender made up one of the flags. CAPI-sourced data is not checked, because its horizons flag is inferred from the station."
+  fails: {message: {horizons: false, odyssey: true}}
+  passes: {message: {horizons: true, odyssey: true}}
+
+GEN-027:
+  how: "No horizons key, on every schema except blackmarket/1 (which does not define the flags). A note."
+  fails: {schema: commodity/3, message: {horizons: (left out)}}
+  passes: {schema: commodity/3, message: {horizons: true}}
+
+GEN-027J:
+  how: "A journal/1 message without a horizons key. Every client's LoadGame carries Horizons, and only the Odyssey key can be absent (Horizons 3.8 clients). So odyssey sent without horizons fails too."
+  fails: {message: {horizons: (left out), odyssey: true}}
+  passes: {message: {horizons: true, odyssey: (left out)}}
+
+GEN-030:
+  how: "A SystemAddress (id64) encodes the boxel, a cube of the galaxy, that its system lies in. Fails when the StarPos sent with it lies outside that cube, which means the name and position belong to another system, often the previous one after a jump. Checked for the message and for each NavRoute hop. A position outside the galaxy also fails."
+  fails: {message: {StarSystem: Sol, SystemAddress: 10477373803, StarPos: [100.0, 0.0, 0.0]}}
+  passes: {message: {StarSystem: Sol, SystemAddress: 10477373803, StarPos: [0.0, 0.0, 0.0]}}
+
+GEN-033:
+  how: "A generated (procedural) system name such as Byeia Eur BH-C d13-1 encodes the same boxel and number as its SystemAddress. Fails when the two differ. Hand-named systems such as Sol are not checked."
+  fails: {message: {StarSystem: Byeia Eur BH-C d13-2, SystemAddress: 47102118899}}
+  passes: {message: {StarSystem: Byeia Eur BH-C d13-1, SystemAddress: 47102118899}}
+
+GEN-035:
+  how: "BodyName does not begin with the name of the system it is reported in, for a system with a generated name, so the body is from another system. Hand-named systems are not checked, since their bodies can have any name."
+  fails: {schema: scanorganic/1, message: {StarSystem: Byeia Eur BH-C d13-1, BodyName: Ceti Sector EB-X b1-4 3}}
+  passes: {schema: scanorganic/1, message: {StarSystem: Byeia Eur BH-C d13-1, BodyName: Byeia Eur BH-C d13-1 3}}
+
+GEN-032:
+  how: "StarPos is exactly [0, 0, 0] for any system other than Sol, in the message or a NavRoute hop. That is a placeholder, not a position."
+  fails: {message: {StarSystem: Byeia Eur BH-C d13-1, StarPos: [0, 0, 0]}}
+  passes: {message: {StarSystem: Byeia Eur BH-C d13-1, StarPos: [10737.84375, 375.5, 6458.25]}}
+
+GEN-034:
+  how: "Any key, at any depth, that carries the commander's own data: FID, Commander, Credits, Loan, ShipID, ShipName, ShipIdent, FuelCapacity, Reputation, MyReputation, Wanted, ActiveFine or Bounty."
+  fails: {message: {Factions: [{Name: Mother Gaia, Influence: 0.4, MyReputation: 5.0}]}}
+  passes: {message: {Factions: [{Name: Mother Gaia, Influence: 0.4}]}}
+
+GEN-040:
+  how: "A list the schema marks unique repeats an item. These are prohibited on commodity/3, modules on outfitting, ships on shipyard, and each commodity's statusFlags. The gateway currently accepts these with a warning."
+  fails: {schema: shipyard/2, message: {ships: [sidewinder, sidewinder]}}
+  passes: {schema: shipyard/2, message: {ships: [sidewinder, eagle]}}
+
+GEN-042:
+  how: "A MarketID from 127,000,000 to 127,999,999. These are the shared placeholder IDs of instanced Operations stations, which are not part of the permanent galaxy. A note, since the game writes them."
+  fails: {schema: dockinggranted/1, message: {MarketID: 127000123}}
+  passes: {schema: dockinggranted/1, message: {MarketID: 3228342528}}
+
+GEN-043:
+  how: "A MarketID below 127,000,000, including negative values, which no real station has. It usually means test data sent to a live schema, or a 64-bit ID damaged by a 32-bit field. The /test schemas are not checked."
+  fails: {schema: dockinggranted/1, message: {MarketID: 42}}
+  passes: {schema: dockinggranted/1, message: {MarketID: 128016640}}
+
+GEN-041:
+  how: "A MarketID of 18446744073709551615 (2^64-1), the game's own \"no market\" value, or that value rounded by the sender (anything from 2^63 up). A note, since the game writes it."
+  fails: {schema: dockinggranted/1, message: {MarketID: 18446744073709551615}}
+  passes: {schema: dockinggranted/1, message: {MarketID: 128016640}}
+
+JNL-001:
+  how: "A CodexEntry event sent on journal/1. Allowed, but codexentry/1 is the schema made for it. A note."
+  fails: {message: {event: CodexEntry}}
+  passes: {message: {event: FSDJump}}
+
+COM-001:
+  how: "A commodity name still in the journal's internal form, starting with $ or ending in _name; (such as $gold_name;). Journal-sourced senders must strip both."
+  fails: {message: {commodities: [{name: $gold_name;}]}}
+  passes: {message: {commodities: [{name: gold}]}}
+
+COM-002:
+  how: "A journal-sourced market (gameversion not CAPI-…) that sends economies or prohibited as an empty list instead of leaving it out. CAPI markets are not checked, since the CAPI can return an empty list."
+  fails: {header: {gameversion: 4.4.1.1, gamebuild: "r332841/r0 "}, message: {prohibited: []}}
+  passes: {header: {gameversion: 4.4.1.1, gamebuild: "r332841/r0 "}, message: {prohibited: (left out)}}
+
+COM-003:
+  how: "Limpets in the commodity list (drones, or $drones_name;). They cannot be traded, and the README says to skip them."
+  fails: {message: {commodities: [{name: drones}]}}
+  passes: {message: {commodities: [{name: gold}]}}
+
+COM-006:
+  how: "A CAPI market (gameversion CAPI-…) whose economies include Colony while its horizons flag is false. This is the README's rule for when the sender cannot read LoadGame: a Colony economy only exists in Horizons. Journal-sourced markets take the flag from LoadGame and are not checked."
+  fails: {message: {economies: [{name: Colony, proportion: 1.0}], horizons: false, odyssey: false}}
+  passes: {message: {economies: [{name: Colony, proportion: 1.0}], horizons: true, odyssey: false}}
+
+COM-007:
+  how: "The same commodity name (in any letter case) appears twice in the list."
+  fails: {message: {commodities: [{name: gold}, {name: Gold}]}}
+  passes: {message: {commodities: [{name: gold}, {name: silver}]}}
+
+OUT-001:
+  how: "Int_PlanetApproachSuite (in any letter case) in the module list. Every ship has one, and the README says it must always be removed."
+  fails: {message: {modules: [Int_PlanetApproachSuite, Hpt_PulseLaser_Fixed_Small]}}
+  passes: {message: {modules: [Hpt_PulseLaser_Fixed_Small]}}
+
+CDX-001:
+  how: "BodyName is present but empty or blank. Without a body name, the key must be left out."
+  fails: {message: {BodyName: ""}}
+  passes: {message: {BodyName: (left out)}}
+
+CDX-003:
+  how: "A codex entry with Latitude, so made on a planet's surface, but no BodyName. The README asks senders to track which body the player is on. A note."
+  fails: {message: {Latitude: 12.5, Longitude: 3.0}}
+  passes: {message: {Latitude: 12.5, Longitude: 3.0, BodyName: Sol 3}}
+
+FSD-001:
+  how: "The message timestamp is not the first signal's timestamp. They are compared as times, so 12:00:00Z and 12:00:00.000Z count as the same."
+  fails: {message: {timestamp: "2026-10-13T12:00:01Z"}}
+  passes: {message: {timestamp: "2026-10-13T12:00:00.000Z"}}
+
+FSD-003:
+  how: "A signal's timestamp is earlier than the one before it in the list. A note."
+  fails: {message: {timestamp: "2026-10-13T12:00:01Z", signals: [{timestamp: "2026-10-13T12:00:01Z", SignalName: A}, {timestamp: "2026-10-13T12:00:00Z", SignalName: B}]}}
+  passes: {message: {timestamp: "2026-10-13T12:00:00Z", signals: [{timestamp: "2026-10-13T12:00:00Z", SignalName: A}, {timestamp: "2026-10-13T12:00:01Z", SignalName: B}]}}
+
+NAV-001:
+  how: "Route is an empty list, so the message carries nothing. A note."
+  fails: {message: {Route: []}}
+
+NAV-002:
+  how: "Two hops in a row in Route have the same SystemAddress."
+  fails: {message: {Route: [{StarSystem: Sol, SystemAddress: 10477373803}, {StarSystem: Sol, SystemAddress: 10477373803}]}}
+  passes: {message: {Route: [{StarSystem: Sol, SystemAddress: 10477373803}, {StarSystem: Byeia Eur BH-C d13-1, SystemAddress: 47102118899}]}}
+
+APS-001:
+  how: "Station details with content (a StationFaction, StationGovernment, StationEconomy and so on) but no MarketID. Settlements with a market carry both. Guardian ruins and visitor beacons carry neither, or an empty StationFaction, which passes."
+  fails: {message: {MarketID: (left out), StationFaction: {Name: Mother Gaia}}}
+  passes: {message: {MarketID: (left out), StationFaction: {}}}
+
+SBC-001:
+  how: "Some of the seven orbital elements are sent and others left out: SemiMajorAxis, Eccentricity, OrbitalInclination, Periapsis, OrbitalPeriod, AscendingNode and MeanAnomaly. None at all passes, since each is to be sent only if it is in the game's data. A note."
+  fails: {message: {MeanAnomaly: (left out)}}
+  passes: {message: {SemiMajorAxis: (left out), Eccentricity: (left out), OrbitalInclination: (left out), Periapsis: (left out), OrbitalPeriod: (left out), AscendingNode: (left out), MeanAnomaly: (left out)}}
+
+FSB-001:
+  how: "Signals is an empty list, so the message carries nothing. A note."
+  fails: {message: {Signals: []}}
+
+DCK-001:
+  how: "StationName is empty or blank. A note."
+  fails: {message: {StationName: ""}}
+  passes: {message: {StationName: Jameson Memorial}}
+
+FCJ-001:
+  how: "fcmaterials_journal/1 sent with a CAPI market or shipyard gameversion. That schema is for the journal's FCMaterials event, and carrier data from the CAPI goes on fcmaterials_capi/1. A CAPI-…-journal value passes."
+  fails: {header: {gameversion: CAPI-Live-market, gamebuild: ""}}
+  passes: {header: {gameversion: CAPI-Live-journal, gamebuild: ""}}
+
+FCJ-002:
+  how: "An Items entry has keys other than id, Name, Price, Stock and Demand, the fields of FCMaterials.json. A note."
+  fails: {message: {Items: [{id: 1, Name: $x_name;, Price: 1, Stock: 1, Demand: 0, Category: Item}]}}
+  passes: {message: {Items: [{id: 1, Name: $x_name;, Price: 1, Stock: 1, Demand: 0}]}}
+
+FCJ-003:
+  how: "CarrierID is not a carrier callsign. Fleet carriers use XXX-XXX, and squadron carriers four characters. A note."
+  fails: {message: {CarrierID: Carrier One}}
+  passes: {message: {CarrierID: X3F-N5Z}}
+
+FCC-001:
+  how: "Items has keys other than purchases and sales, which means the whole CAPI market was sent instead of just the onfootmicroresources part."
+  fails: {message: {Items: {purchases: [], sales: {}, commodities: []}}}
+  passes: {message: {Items: {purchases: [], sales: {}}}}
+
+FCC-002:
+  how: "Items is not an object, lacks purchases or sales, or has a purchases value that is not a list."
+  fails: {message: {Items: {sales: {}}}}
+  passes: {message: {Items: {purchases: [], sales: {}}}}
+
+FCC-003:
+  how: "A locName key anywhere under Items. The schema itself already rejects locName inside well-formed purchases and sales entries, so this catches it elsewhere, such as in a market dumped into Items."
+  fails: {message: {Items: {purchases: [], sales: {}, market: {locName: Gold}}}}
+  passes: {message: {Items: {purchases: [], sales: {}}}}
+
+FCC-004:
+  how: "A sales key that is not a number, or an entry whose id differs from its key. Sales are keyed by commodity id."
+  fails: {message: {Items: {purchases: [], sales: {gold: {id: 7, name: gold, price: 1, stock: 1}}}}}
+  passes: {message: {Items: {purchases: [], sales: {"7": {id: 7, name: gold, price: 1, stock: 1}}}}}
+
+BLK-001:
+  how: "Every blackmarket/1 message. The schema is deprecated; prohibited goods are listed in commodity/3's prohibited list instead."
+  fails: {}
+
+BLK-002:
+  how: "TotalSale, AvgPricePaid, StolenGoods or BlackMarket is sent. They describe the commander's own sale and must be removed."
+  fails: {message: {TotalSale: 1000}}
+  passes: {message: {TotalSale: (left out)}}
+
+OUT-003:
+  how: "Two modules in an outfitting/3 list share an id. Checked on id, not Name, because regular, pre-engineered and merc-coin versions of a module legitimately share a Name."
+  fails: {message: {modules: [{id: 1, Name: hpt_pulselaser_fixed_small, BuyPrice: 1}, {id: 1, Name: hpt_pulselaser_fixed_small, BuyPrice: 1}]}}
+  passes: {message: {modules: [{id: 1, Name: hpt_pulselaser_fixed_small, BuyPrice: 1}, {id: 2, Name: hpt_pulselaser_fixed_small, BuyPrice: 2}]}}
+
+SCO-001:
+  how: "The journal's Body key is sent as it is; the schema requires it to be renamed to BodyID."
+  fails: {message: {Body: 3, BodyID: (left out)}}
+  passes: {message: {BodyID: 3}}
+
+SCO-002:
+  how: "BodyName is present but empty or blank. Without a body name, the key must be left out."
+  fails: {message: {BodyName: ""}}
+  passes: {message: {BodyName: (left out)}}
+
+SCO-004:
+  how: "Latitude outside -90 to 90, or Longitude outside -180 to 180."
+  fails: {message: {Latitude: 95.0}}
+  passes: {message: {Latitude: 12.5}}
+
+SCO-005:
+  how: "The Variant is not a variant of the Species. For $Codex_Ent_Bacterial_01_Name; the variant must start with $Codex_Ent_Bacterial_01_. A note."
+  fails: {message: {Variant: $Codex_Ent_Bacterial_02_K_Name;}}
+  passes: {message: {Variant: $Codex_Ent_Bacterial_01_K_Name;}}
