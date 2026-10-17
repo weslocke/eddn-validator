@@ -861,8 +861,9 @@ A multi-agent review compared every rule with the documentation it cites (`EDCD/
 - **COM-006** applies to CAPI markets only: it is the README's fallback for a sender that cannot read LoadGame.
 - **GEN-043** skips /test schemas and catches negative MarketIDs. **GEN-041** also catches the no-market value rounded by a 64-bit float. **COM-003** also catches `$drones_name;`. **DCK-001** treats a blank StationName as empty. **NAV-001** is cited as implied.
 - New **GEN-009** (minor): a journal gameversion with an empty gamebuild, or the reverse. New **GEN-009B** (serious): CAPI market or shipyard data carrying a journal build as gamebuild.
+- **OUT-001** is now minor. The README's "remove ... (for historical reasons)" is a plain instruction, not a MUST, and the listing is not wrong: the module is on sale. EDDiscovery and EDDLite still send it (EliteDangerousCore's `CreateEDDNOutfittingMessage` keeps every weapon, internal and armour item), in about 57% of their outfitting messages, so they are still flagged.
 - FCC-003 stays as it is: the schema rejects `locName` in well-formed entries, but a whole market dumped into `Items` passes the gateway.
 
-None of these but GEN-027J and JNL-001 matched a message that week.
+Of the review's own findings, only GEN-027J and JNL-001 matched a message that week (OUT-001 was lowered afterwards, on a separate question).
 
 The technical page now opens each rule into what it checks exactly (exceptions included), a failing and a passing example, and how often each reference app fails it. The rates are read from the reference profiles, which migration 0011 lets the web role read. The examples live in `config/rule_details.yaml`, and `tests/test_rules.py` runs each one through the real checks. A failing example must raise the rule and a passing one must not, so the page cannot drift from the code. Every enabled rule must have an entry. The page also gained sections on what pairing compares and on what the gateway already rejects.

@@ -234,9 +234,9 @@ rules:
     title: each commodity listed once
     source: implied
   OUT-001:
-    severity: error
+    severity: warning   # a plain instruction "for historical reasons", not a MUST; the data is not wrong
     schemas: [outfitting/2, outfitting/3]
-    title: Int_PlanetApproachSuite must be removed
+    title: Int_PlanetApproachSuite should be removed
     source: outfitting-README:50
   CDX-001:
     severity: error

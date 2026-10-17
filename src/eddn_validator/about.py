@@ -70,7 +70,7 @@ RULE_GROUPS: list[tuple[str, list[tuple[str, str]]]] = [
         ("COM-005", "Market data from the online service includes its status flags."),
         ("COM-006", "Online-service market data from a station with a Colony economy is marked as Horizons."),
         ("COM-007", "Each commodity is listed once."),
-        ("OUT-001", "The planetary approach suite, which must always be removed, is not listed."),
+        ("OUT-001", "The basic planetary approach suite, which EDDN asks senders to remove, is not listed."),
         ("OUT-003", "Each module is listed once."),
     ]),
     ("Exploration and travel", [

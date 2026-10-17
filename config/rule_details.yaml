@@ -206,7 +206,7 @@ COM-007:
   passes: {message: {commodities: [{name: gold}, {name: silver}]}}
 
 OUT-001:
-  how: "Int_PlanetApproachSuite (in any letter case) in the module list. Every ship has one, and the README says it must always be removed."
+  how: "Int_PlanetApproachSuite (in any letter case) in the module list. Every ship has one, and the README asks for it to be removed (for historical reasons). Int_PlanetApproachSuite_Advanced is a separate module and passes."
   fails: {message: {modules: [Int_PlanetApproachSuite, Hpt_PulseLaser_Fixed_Small]}}
   passes: {message: {modules: [Hpt_PulseLaser_Fixed_Small]}}
 
