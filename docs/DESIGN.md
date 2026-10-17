@@ -892,3 +892,12 @@ A card listed every event type the reference apps send but the version did not a
 - **Not sent by this application:** no version with messages on file has sent it. The "Not sent" tile counts only these, with the other count beside it.
 
 Neither is scored. The reference column is now labelled "messages profiled", since it shows the profile sample (up to 2,000 newest per app), not messages on file. The card's Basis line now describes the confidence ramp (§31) correctly.
+
+## 33. Wrong SystemAddresses the rules cannot see (2026-10-17)
+
+A corrupted or stale SystemAddress was caught by GEN-030 (position outside the boxel the address encodes) and GEN-033 (a generated name that does not match it). Two cases got through:
+
+- **Negative addresses.** Nothing decodes from them, so GEN-030 skipped them silently. New rule **GEN-036** (serious) flags any negative SystemAddress, in the message or a NavRoute hop. No upper limit is applied: none is documented, and the largest real id64 (7.3e15) is far from any boundary.
+- **A wrong address in the same boxel, for a name that cannot confirm it** (hand-named systems, and hand-made sectors where GEN-033 returns None). Pairing now covers this. When a claim's address has no reference fact, it looks the system up by name *and* position (two systems can share a name, never a name and a position, so genuine duplicate names are never accused). If exactly one fact matches and its address differs, that is a system mismatch on `SystemAddress`. It is applied only where GEN-030 and GEN-033 are silent, so no fault is penalised twice. NavRoute hops are checked the same way. The lookup uses a new index, `facts_system_name_idx`.
+
+This enforces the developer guide's MUST (Dev:444-456: cross-check the system name, StarPos and SystemAddress). A by-name search over all history beforehand (15.6M messages from other apps) found no bit-corrupted addresses. Of 824 addresses 1–2 bits off, 820 were stale locations (811 from Elite Warboard) and 3 were genuine duplicate names. All history was re-paired once so existing cards include the new check.

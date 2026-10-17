@@ -44,6 +44,8 @@ PLAIN = [
     ("facts_system_last_seen_idx", "facts_system", "(last_seen)"),
     ("facts_body_last_seen_idx", "facts_body", "(last_seen)"),
     ("facts_station_last_seen_idx", "facts_station", "(last_seen)"),
+    # Pairing looks systems up by name where the address cannot be confirmed otherwise.
+    ("facts_system_name_idx", "facts_system", "(star_system)"),
     # Insert-only and in time order: a BRIN index serves retention's age deletes at a
     # fraction of a btree's size and insert cost (replaced pair_results_gw_ts_idx).
     ("pair_results_gw_ts_brin", "pair_results", "USING brin (gw_ts) WITH (pages_per_range = 32)"),

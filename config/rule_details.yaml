@@ -145,6 +145,11 @@ GEN-035:
   fails: {schema: scanorganic/1, message: {StarSystem: Byeia Eur BH-C d13-1, BodyName: Ceti Sector EB-X b1-4 3}}
   passes: {schema: scanorganic/1, message: {StarSystem: Byeia Eur BH-C d13-1, BodyName: Byeia Eur BH-C d13-1 3}}
 
+GEN-036:
+  how: "A SystemAddress below zero, in the message or a NavRoute hop. An id64 is an unsigned number, so a negative value is a damaged one, typically a large address squeezed through a signed field. GEN-030 cannot check these, since no region of the galaxy decodes from a negative number."
+  fails: {message: {SystemAddress: -47102118899}}
+  passes: {message: {SystemAddress: 47102118899}}
+
 GEN-032:
   how: "StarPos is exactly [0, 0, 0] for any system other than Sol, in the message or a NavRoute hop. That is a placeholder, not a position."
   fails: {message: {StarSystem: Byeia Eur BH-C d13-1, StarPos: [0, 0, 0]}}

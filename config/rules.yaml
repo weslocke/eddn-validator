@@ -153,6 +153,11 @@ rules:
     schemas: "*"
     title: a body must belong to the system it is reported in (stale location)
     source: Dev:444-456; scanorganic-README:64-66
+  GEN-036:
+    severity: error   # no real id64 is negative: a damaged value, wrong for listeners
+    schemas: "*"
+    title: SystemAddress must be a real id64 (never negative)
+    source: Dev:444-456; implied (an id64 is an unsigned number; negative means a damaged value)
   GEN-032:
     severity: warning
     schemas: "*"

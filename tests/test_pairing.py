@@ -102,3 +102,19 @@ def test_moving_stations_are_not_tied_to_a_system():
     assert result is None or "system" not in result[2]
     assert facts.moving_station(3_600_000_123, None) and facts.moving_station(1, "fleetcarrier")
     assert not facts.moving_station(4_210_000_000, "coriolis")
+
+
+def test_address_checked_by_name_and_position_only_where_no_rule_can():
+    sol, pos = 10477373803, (0.0, 0.0, 0.0)          # mass code d: bits 35 and up are the N2 number
+    by_name = {"Sol": [(sol, [0.0, 0.0, 0.0])],
+               "LZK 12": [(10393389307, [1.0, 2.0, 3.0]), (44753127675, [9.0, 9.0, 9.0])]}
+    wrong_n2 = sol | (1 << 35)                        # same boxel: GEN-030 cannot see it
+    assert pairing.address_by_name(wrong_n2, "Sol", pos, by_name) == sol
+    assert pairing.address_by_name(sol ^ (1 << 10), "Sol", pos, by_name) is None   # other boxel: GEN-030's
+    assert pairing.address_by_name(wrong_n2, "Sol", (500.0, 0.0, 0.0), by_name) is None  # another Sol?
+    assert pairing.address_by_name(123, "LZK 12", (5.0, 5.0, 5.0), by_name) is None      # name alone: never
+    msg = {"StarSystem": "Sol", "SystemAddress": wrong_n2, "StarPos": [0, 0, 0]}
+    assert pairing.compare_system(msg, {}, by_name) == (1, 1, {"SystemAddress": [wrong_n2, sol]})
+    assert pairing.compare_system(msg, {}, {}) is None
+    route = {"Route": [msg, {"StarSystem": "Sol", "SystemAddress": sol, "StarPos": [0, 0, 0]}]}
+    assert pairing.compare_navroute(route, {sol: ("Sol", [0, 0, 0])}, by_name)[:2] == (3, 1)

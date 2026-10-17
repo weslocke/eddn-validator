@@ -45,6 +45,7 @@ RULE_GROUPS: list[tuple[str, list[tuple[str, str]]]] = [
                     "(catches a name and position left over from the previous system after a jump)."),
         ("GEN-033", "A star system's name matches its system ID (for names the game generates)."),
         ("GEN-035", "A planet or moon belongs to the star system it is reported in."),
+        ("GEN-036", "A star system's ID is a real one (never a negative number)."),
         ("GEN-032", "No made-up 0, 0, 0 position for any system other than Sol."),
         ("GEN-043", "The market ID belongs to a real station (not test data, not a damaged or negative number)."),
         ("GEN-042", "Data from a temporary mission instance, not the permanent galaxy."),

@@ -461,6 +461,15 @@ def starpos_outside_system_address(ctx: Ctx) -> str | None:
     return None
 
 
+@check("GEN-036")
+def negative_system_address(ctx: Ctx) -> str | None:
+    # GEN-030 cannot check these (no boxel decodes from a negative number), so say so here.
+    for where, address, _, name in _positions(ctx):
+        if isinstance(address, int) and not isinstance(address, bool) and address < 0:
+            return f"{where}SystemAddress {address} for {name!r} is negative: no real system has one"
+    return None
+
+
 @check("GEN-033")
 def system_name_not_address(ctx: Ctx) -> str | None:
     for where, address, _, name in _positions(ctx):

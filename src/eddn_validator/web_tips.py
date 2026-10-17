@@ -209,7 +209,9 @@ VALUE_TIPS = {
 }
 PAIR_TIPS = {
     "system": "The system's name and position compared with a reference app's report of the same "
-              "SystemAddress.",
+              "SystemAddress. Where no reference app reported that address, and neither the name nor "
+              "the position can show it is wrong, the name and position are looked up instead and the "
+              "SystemAddress compared.",
     "navroute": "Each route hop's system name and position compared with reference reports.",
     "body": "The body's fixed details (mass, radius, gravity, atmosphere, materials, rings, orbit) "
             "compared with a reference app's scan of the same body.",

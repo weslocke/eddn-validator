@@ -21,6 +21,8 @@ from datetime import timedelta
 import psycopg
 
 from . import facts
+from .id64 import decode as decode_id64
+from .id64 import name_matches_address
 
 log = logging.getLogger(__name__)
 
@@ -82,14 +84,32 @@ def _mismatch(out: dict, key: str, app_value: object, ref_value: object) -> None
         out[key] = [app_value, ref_value]
 
 
-def compare_system(message: dict, known: dict) -> tuple[int, int, dict] | None:
+def address_by_name(address: int, name: str, pos: tuple, by_name: dict) -> int | None:
+    """The real SystemAddress of a system the claim's address has no fact for, found by name
+    AND position (two systems can share a name, never a name and a position), when it differs
+    from the claimed one. Only where no rule can see a wrong address: the name cannot confirm
+    it (hand-named systems, hand-made sectors: GEN-033 returns None) and the position lies in
+    the boxel it encodes (GEN-030 passes). Elsewhere those rules already report it."""
+    candidates = [a for a, p in by_name.get(name, ()) if facts.same_pos(pos, tuple(p))]
+    if len(candidates) != 1 or candidates[0] == address:
+        return None
+    if name_matches_address(name, address) is not None:
+        return None
+    boxel = decode_id64(address)
+    if boxel is None or not boxel.contains(pos):
+        return None
+    return candidates[0]
+
+
+def compare_system(message: dict, known: dict, by_name: dict | None = None) -> tuple[int, int, dict] | None:
     claims = facts.systems_in({k: v for k, v in message.items() if k != "Route"})
     if not claims:
         return None
     address, name, pos = claims[0]
     fact = known.get(address)
     if fact is None:
-        return None
+        real = address_by_name(address, name, pos, by_name or {})
+        return (1, 1, {"SystemAddress": [address, real]}) if real is not None else None
     ref_name, ref_pos = fact
     out: dict = {}
     if name != ref_name:
@@ -99,14 +119,21 @@ def compare_system(message: dict, known: dict) -> tuple[int, int, dict] | None:
     return 2, len(out), out
 
 
-def compare_navroute(message: dict, known: dict) -> tuple[int, int, dict] | None:
+def compare_navroute(message: dict, known: dict, by_name: dict | None = None) -> tuple[int, int, dict] | None:
     compared = mismatched = 0
     out: dict = {}
     for i, hop in enumerate(message.get("Route") or []):
         claims = facts.systems_in(hop) if isinstance(hop, dict) else []
-        if not claims or claims[0][0] not in known:
+        if not claims:
             continue
         address, name, pos = claims[0]
+        if address not in known:
+            real = address_by_name(address, name, pos, by_name or {})
+            if real is not None:
+                compared += 1
+                mismatched += 1
+                _mismatch(out, f"Route[{i}].SystemAddress", address, real)
+            continue
         ref_name, ref_pos = known[address]
         compared += 2
         if name != ref_name:
@@ -196,11 +223,12 @@ def compare_market(message: dict, msg_ts, source: str, snapshots: list) -> tuple
 
 
 def compare_all(m: dict, event_type: str, gw_ts, msg_ts, source: str, known_systems: dict,
-               known_bodies: dict, known_stations: dict, snapshots: dict) -> dict:
+               known_bodies: dict, known_stations: dict, snapshots: dict,
+               by_name: dict | None = None) -> dict:
     market = facts.db_int(m.get("marketId"))
     return {
-        "system": compare_system(m, known_systems),
-        "navroute": compare_navroute(m, known_systems) if "Route" in m else None,
+        "system": compare_system(m, known_systems, by_name),
+        "navroute": compare_navroute(m, known_systems, by_name) if "Route" in m else None,
         "body": compare_body(m, known_bodies) if event_type == "journal/1:Scan" else None,
         "station": compare_station(event_type, m, gw_ts, known_stations),
         "market": (compare_market(m, msg_ts, source, snapshots.get(market, []))
@@ -243,6 +271,14 @@ def pair_messages(conn: psycopg.Connection, deadline: float, upto: int | None = 
                                     " star_system, pinned FROM facts_station WHERE market_id = ANY(%s)",
                               markets)
         known_systems = {r[0]: (r[1], r[2]) for r in rows_s}
+        # Claims whose address has no fact, where only the name can show a wrong address.
+        names = {name for _, _, _, _, _, _, _, m, _ in messages for a, name, _ in facts.systems_in(m)
+                 if a not in known_systems and name_matches_address(name, a) is None}
+        by_name: dict[str, list] = {}
+        for address, name, pos in facts.lookup(
+                conn, "SELECT system_address, star_system, star_pos FROM facts_system"
+                      " WHERE NOT conflict AND star_system = ANY(%s)", names):
+            by_name.setdefault(name, []).append((address, pos))
         known_bodies = {(r[0], r[1]): (r[2], r[3]) for r in rows_b}
         known_stations = {r[0]: (r[1], r[2], r[3], r[4]) for r in rows_m}
         # Facts another app has now reported are kept for good (retention skips pinned rows).
@@ -262,7 +298,7 @@ def pair_messages(conn: psycopg.Connection, deadline: float, upto: int | None = 
                 live = branch != "legacy"
                 pairs = compare_all(m, event_type, gw_ts, msg_ts, source, known_systems,
                                     known_bodies if live else {}, known_stations if live else {},
-                                    snapshots if live else {})
+                                    snapshots if live else {}, by_name)
             except Exception:   # sender-controlled JSON: one odd message must never stall pairing
                 log.exception("pairing skipped message %s", mid)
                 continue

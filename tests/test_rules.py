@@ -130,6 +130,8 @@ CASES = [
     ("GEN-030", mutate("journal/1", lambda m: m.update(StarSystem="Sol", SystemAddress=10477373803,
                                                        StarPos=[100.0, 0.0, 0.0]))),
     ("GEN-030", mutate("navroute/1", lambda m: m["Route"][1].update(StarPos=[0, 0, 0]))),
+    ("GEN-036", mutate("journal/1", lambda m: m.update(SystemAddress=-47102118899))),
+    ("GEN-036", mutate("navroute/1", lambda m: m["Route"][1].update(SystemAddress=-47102118899))),
     ("GEN-032", mutate("journal/1", lambda m: m.update(StarPos=[0, 0, 0]))),
     ("GEN-032", mutate("navroute/1", lambda m: m["Route"][1].update(StarPos=[0, 0, 0]))),
     ("GEN-034", mutate("journal/1", lambda m: m.update(Factions=[{"Name": "F", "MyReputation": 5.0}]))),
