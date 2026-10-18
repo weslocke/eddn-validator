@@ -926,3 +926,8 @@ That left 3,412 station disagreements (0.23%). Two more patterns were ours, not 
 
 - EDDI reported MarketID 4353087235 in April–May as "Eesuola Dock" in Col 285 Sector TP-O d6-19. The record, last seen August 15, is "Ricardo Platform" in Shui Wei Sector JI-S b4-7. That colony-era ID went to a different station, which matches the EDCD Discord: static colony stations draw IDs from a shared pool. The system is now compared only when the report names the station on record (its current or previous name). A wrong system on the right station is still caught.
 - About 830 Docked and docking reports from EDRobot and EDDI typed Coriolis, Orbis, Outpost and Dodec stations as SurfaceStation. SurfaceStation is the game's generic type, already ignored for change detection, so it gives no type verdict now either.
+
+Then 707 (0.047%) remained, and three more patterns were ours:
+- System names were compared with letter case ("delphi" against "Delphi"). They are now compared ignoring case.
+- PowerPlay Stronghold Carriers are named in the player's language: a reference app recorded "Porte-vaisseaux de forteresse". Their names are not compared.
+- Colony-era stations do change system. "Erebor" (MarketID 4274944003) was reported by the reference apps in HIP 7860 until 2026-09-09 and in Col 285 Sector RI-R c5-10 from 2026-09-28, so other apps' August reports were right. For MarketIDs from 4.2e9 up, the system is compared only against a record from within 7 days of the report. Original-galaxy stations, which never move, keep the any-age comparison.

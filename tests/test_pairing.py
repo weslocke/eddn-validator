@@ -190,7 +190,30 @@ def test_system_compared_only_for_the_same_station_and_generic_type_skipped():
     other = {"marketId": 4353087235, "stationName": "Eesuola Dock", "systemName": "Col 285 Sector TP-O d6-19"}
     assert pairing.compare_station("commodity/3", other, april, known) is None       # reissued ID
     moved = {"marketId": 4353087235, "stationName": "Ricardo Platform", "systemName": "Col 285 Sector TP-O d6-19"}
-    assert pairing.compare_station("commodity/3", moved, april, known)[1] == 1         # same station, wrong system
+    assert pairing.compare_station("commodity/3", moved, aug, known)[1] == 1           # same station, wrong system
     generic = {"MarketID": 4353087235, "StationName": "Ricardo Platform", "StationType": "SurfaceStation",
                "StarSystem": "Shui Wei Sector JI-S b4-7"}
     assert pairing.compare_station("journal/1:Docked", generic, aug, known) == (2, 0, {})
+
+
+def test_system_case_and_stronghold_carrier_names():
+    from datetime import datetime, timezone
+    t = datetime(2026, 10, 18, tzinfo=timezone.utc)
+    known = {128000001: ("Delphi Port", "Coriolis", t, "Delphi"),
+             3850000000: ("Porte-vaisseaux de forteresse", "SurfaceStation", t, None)}
+    assert pairing.compare_station("journal/1:Docked", {"MarketID": 128000001, "StationName": "Delphi Port",
+                                   "StationType": "Coriolis", "StarSystem": "delphi"}, t, known) == (3, 0, {})
+    assert pairing.compare_station("journal/1:Docked", {"MarketID": 3850000000, "StationName": "Stronghold Carrier",
+                                   "StationType": "SurfaceStation", "StarSystem": "X"}, t, known) is None
+
+
+def test_colony_era_system_only_against_a_recent_record():
+    from datetime import datetime, timezone
+    oct3, aug28 = datetime(2026, 10, 3, tzinfo=timezone.utc), datetime(2026, 8, 28, tzinfo=timezone.utc)
+    known = {4274944003: ("Erebor", "Dodec", oct3, "Col 285 Sector RI-R c5-10"),
+             128000001: ("Old Port", "Orbis", oct3, "Sol")}
+    erebor = {"MarketID": 4274944003, "StationName": "Erebor", "StationType": "Dodec", "StarSystem": "HIP 7860"}
+    assert pairing.compare_station("journal/1:Docked", erebor, aug28, known) is None
+    assert pairing.compare_station("journal/1:Docked", erebor, oct3, known)[1] == 1
+    old = {"MarketID": 128000001, "StationName": "Old Port", "StationType": "Orbis", "StarSystem": "Lave"}
+    assert pairing.compare_station("journal/1:Docked", old, aug28, known) == (1, 1, {"system": ["Lave", "Sol"]})

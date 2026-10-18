@@ -189,7 +189,10 @@ def compare_station(event_type: str, message: dict, gw_ts, known: dict) -> tuple
     if state is not None:
         ref_name, ref_type, seen = state
     if state is not None and abs(gw_ts - seen) <= STATION_FRESH:
-        if name and ref_name:
+        # PowerPlay Stronghold Carriers (SurfaceStation in the carrier block) are named in the
+        # player's language ("Porte-vaisseaux de forteresse"): their names are not compared.
+        stronghold = market in facts.CARRIER_RANGE and "surfacestation" in (kind, facts.station_type_key(ref_type))
+        if name and ref_name and not stronghold:
             compared += 1
             if name.lower() != ref_name.lower():
                 mismatched += 1
@@ -205,9 +208,12 @@ def compare_station(event_type: str, message: dict, gw_ts, known: dict) -> tuple
     # other stations elsewhere, and a different name means a different station, not a wrong system.
     system, _ = facts.station_system(event_type, message)
     same_station = not name or not names_on_record or name.lower() in names_on_record
-    if system and ref_system and same_station and not facts.moving_station(market, kind or facts.station_type_key(ref_type)):
+    # Colony-era IDs: the system only against a record from within STATION_FRESH of the report.
+    settled = market < facts.FIRST_COLONY_ID or abs(gw_ts - last_seen) <= STATION_FRESH
+    if (system and ref_system and same_station and settled
+            and not facts.moving_station(market, kind or facts.station_type_key(ref_type))):
         compared += 1
-        if system != ref_system:
+        if system.lower() != ref_system.lower():     # system names are case-insensitive in game
             mismatched += 1
             _mismatch(out, "system", system, ref_system)
     return (compared, mismatched, out) if compared else None

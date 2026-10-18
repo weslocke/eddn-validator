@@ -164,6 +164,11 @@ TEMPORARY_TYPES = {"spaceconstructiondepot", "planetaryconstructiondepot"}
 COLONISATION_RANGE = range(3_950_000_000, 4_000_000_000)
 
 
+# Colony-era MarketIDs (built stations, 4.2e9 up) can move to another system when the game
+# reissues them (MarketID 4274944003, "Erebor": HIP 7860 until 2026-09-09, Col 285 Sector RI-R
+# c5-10 from 2026-09-28). Original-galaxy stations never change system.
+FIRST_COLONY_ID = 4_200_000_000
+
 # Construction sites by name, for reports that carry no station type (ApproachSettlement).
 TEMPORARY_NAMES = ("planetary construction site:", "orbital construction site:")
 
