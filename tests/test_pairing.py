@@ -161,3 +161,11 @@ def test_batch_marks_when_a_station_changes():
                                        "StarSystem": "Sol"}, "live", "journal", "EDMC", t(h), t(h))
     st = batch.stations[128016640]
     assert (st["name"], st["since"], st["last"]) == ("Galileo", t(18), t(19))
+
+
+def test_what_counts_as_a_station_change():
+    assert facts.station_changed("Abraham Lincoln", "orbis", "Galileo", "ocellus")
+    assert facts.station_changed("Bethe City", "outpost", "Bethe City", "coriolis")
+    assert not facts.station_changed("Bethe City", None, "Bethe City", "coriolis")      # type unknown
+    assert not facts.station_changed("Two Jumps", "fleetcarrier", "Two Jumps", "surfacestation")
+    assert not facts.station_changed("galileo", "ocellus", "Galileo", "ocellus")        # letter case

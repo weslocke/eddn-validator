@@ -324,8 +324,7 @@ class Batch:
                                                        "address": None, "system_seen": None,
                                                        "since": gw_ts})
                 if gw_ts >= st["last"] or st["name"] is None:
-                    if (name and st["name"] and name.lower() != st["name"].lower()) or (
-                            kind and st["type"] and kind != st["type"]):
+                    if station_changed(st["name"], st["type"], name, kind):
                         st["since"] = gw_ts     # changed within the batch: the new state starts here
                     st["name"] = name or st["name"]
                     st["type"] = kind or st["type"]
@@ -476,11 +475,21 @@ def store(conn: psycopg.Connection, batch: Batch) -> None:
                 " VALUES (%s, %s, %s, %s, %s)", batch.markets)
 
 
+# A change of name always counts; a change of type only when neither is the generic
+# "surfacestation", which the game also uses for carriers and other stations it otherwise types.
 STATION_CHANGED = """(EXCLUDED.last_seen >= facts_station.last_seen AND (
     (EXCLUDED.station_name IS NOT NULL AND facts_station.station_name IS NOT NULL
      AND lower(EXCLUDED.station_name) <> lower(facts_station.station_name))
     OR (EXCLUDED.station_type IS NOT NULL AND facts_station.station_type IS NOT NULL
-        AND EXCLUDED.station_type <> facts_station.station_type)))"""
+        AND EXCLUDED.station_type <> facts_station.station_type
+        AND 'surfacestation' NOT IN (EXCLUDED.station_type, facts_station.station_type))))"""
+
+
+def station_changed(old_name: str | None, old_kind: str | None, name: str | None, kind: str | None) -> bool:
+    """STATION_CHANGED for one pair of states (type keys)."""
+    if old_name and name and old_name.lower() != name.lower():
+        return True
+    return bool(old_kind and kind and old_kind != kind and "surfacestation" not in (old_kind, kind))
 
 
 def station_state_at(t, fact: tuple) -> tuple[str | None, str | None, object] | None:
