@@ -118,3 +118,19 @@ def test_address_checked_by_name_and_position_only_where_no_rule_can():
     assert pairing.compare_system(msg, {}, {}) is None
     route = {"Route": [msg, {"StarSystem": "Sol", "SystemAddress": sol, "StarPos": [0, 0, 0]}]}
     assert pairing.compare_navroute(route, {sol: ("Sol", [0, 0, 0])}, by_name)[:2] == (3, 1)
+
+
+def test_recycled_colonisation_ids_are_not_compared():
+    from datetime import datetime, timezone
+    now = datetime(2026, 10, 17, 21, 28, tzinfo=timezone.utc)
+    known = {3958572546: ("Orbital Construction Site: Rahman Relay", "SpaceConstructionDepot",
+                          datetime(2026, 10, 11, tzinfo=timezone.utc), "Col 285 Sector WD-M b22-4"),
+             4300000003: ("Planetary Construction Site: X", "PlanetaryConstructionDepot", now, "A"),
+             128016640: ("Abraham Lincoln", "Orbis", now, "Sol")}
+    ship = {"MarketID": 3958572546, "StationName": "$EXT_PANEL_ColonisationShip; Malaspina Depot",
+            "StationType": "SurfaceStation", "StarSystem": "Col 359 Sector RS-T d3-106"}
+    assert pairing.compare_station("journal/1:Docked", ship, now, known) is None
+    built = {"MarketID": 4300000003, "StationName": "X Port", "StationType": "Outpost", "StarSystem": "A"}
+    assert pairing.compare_station("journal/1:Docked", built, now, known) is None   # depot finished
+    moved = {"MarketID": 128016640, "StationName": "Abraham Lincoln", "StationType": "Orbis", "StarSystem": "Lave"}
+    assert pairing.compare_station("journal/1:Docked", moved, now, known)[1] == 1    # permanent: still checked

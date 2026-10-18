@@ -155,6 +155,19 @@ MOVING_TYPES = {"fleetcarrier", "megaship"}
 CARRIER_RANGE = range(3_600_000_000, 3_940_000_000)
 
 
+# Colonisation's temporary stations: construction depots, and the colonisation ships that the
+# game types as SurfaceStation, all with IDs in 3.95-4.0e9. The game reuses their MarketIDs for
+# new temporary stations elsewhere once a build finishes (2,332 depot IDs were reported in more
+# than one system by reference apps in 30 days), and a planetary depot's ID passes to the
+# station built there. A record of one says nothing reliable about a later report.
+TEMPORARY_TYPES = {"spaceconstructiondepot", "planetaryconstructiondepot"}
+COLONISATION_RANGE = range(3_950_000_000, 4_000_000_000)
+
+
+def temporary_station(market: int, kind: str | None) -> bool:
+    return kind in TEMPORARY_TYPES or market in COLONISATION_RANGE
+
+
 def moving_station(market: int, kind: str | None) -> bool:
     """Whether a station can change system (so its system is not compared).
 

@@ -175,6 +175,9 @@ def compare_station(event_type: str, message: dict, gw_ts, known: dict) -> tuple
         return None
     market, name, kind = station
     ref_name, ref_type, last_seen, ref_system = known[market]
+    # A recycled colonisation ID (facts.temporary_station): either side may be a different station.
+    if facts.temporary_station(market, kind) or facts.temporary_station(market, facts.station_type_key(ref_type)):
+        return None
     compared = mismatched = 0
     out: dict = {}
     # Name and type change (carrier renames, station rebuilds): compare only recent facts.

@@ -96,6 +96,8 @@ only when that record exists. Every field compared counts, and one mismatch make
   <li><strong>Station</strong> (live game only), matched on MarketID: the name (ignoring letter case) and type, only against a record
     from the last {{ pairing.station_fresh_days }} days, since stations get renamed and rebuilt. Also the system the station is in,
     at any age, except for stations that move: fleet carriers, megaships (rescue ships among them) and PowerPlay Stronghold Carriers.
+    Colonisation's temporary stations (construction depots and colonisation ships) are not compared at all: the game reuses their
+    MarketIDs for new stations elsewhere once a build finishes.
     For a station whose type is unknown, the MarketID range decides.</li>
   <li><strong>Market</strong> (commodity/3, live game only): compared with a reference app's snapshot of the same market, from the
     same source (CAPI or journal), taken within {{ pairing.market_window_minutes }} minutes. The set of commodities must match,
