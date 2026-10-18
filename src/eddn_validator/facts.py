@@ -164,8 +164,13 @@ TEMPORARY_TYPES = {"spaceconstructiondepot", "planetaryconstructiondepot"}
 COLONISATION_RANGE = range(3_950_000_000, 4_000_000_000)
 
 
-def temporary_station(market: int, kind: str | None) -> bool:
-    return kind in TEMPORARY_TYPES or market in COLONISATION_RANGE
+# Construction sites by name, for reports that carry no station type (ApproachSettlement).
+TEMPORARY_NAMES = ("planetary construction site:", "orbital construction site:")
+
+
+def temporary_station(market: int, kind: str | None, name: str | None = None) -> bool:
+    return (kind in TEMPORARY_TYPES or market in COLONISATION_RANGE
+            or (isinstance(name, str) and name.lower().startswith(TEMPORARY_NAMES)))
 
 
 def moving_station(market: int, kind: str | None) -> bool:

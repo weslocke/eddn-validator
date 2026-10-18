@@ -177,7 +177,8 @@ def compare_station(event_type: str, message: dict, gw_ts, known: dict) -> tuple
     ref_name, ref_type, last_seen, ref_system, *previous = known[market]
     previous = (previous + [None] * 4)[:4]
     # A recycled colonisation ID (facts.temporary_station): either side may be a different station.
-    if facts.temporary_station(market, kind) or facts.temporary_station(market, facts.station_type_key(ref_type)):
+    if facts.temporary_station(market, kind, name) or facts.temporary_station(
+            market, facts.station_type_key(ref_type), ref_name):
         return None
     compared = mismatched = 0
     out: dict = {}
@@ -238,7 +239,9 @@ def compare_all(m: dict, event_type: str, gw_ts, msg_ts, source: str, known_syst
         "system": compare_system(m, known_systems, by_name),
         "navroute": compare_navroute(m, known_systems, by_name) if "Route" in m else None,
         "body": compare_body(m, known_bodies) if event_type == "journal/1:Scan" else None,
-        "station": compare_station(event_type, m, gw_ts, known_stations),
+        # Judged at the time the message describes (a replayed old journal entry is not a report
+        # of the station today); the gateway's time only when the message has none.
+        "station": compare_station(event_type, m, msg_ts or gw_ts, known_stations),
         "market": (compare_market(m, msg_ts, source, snapshots.get(market, []))
                    if event_type == "commodity/3" and market is not None else None),
     }

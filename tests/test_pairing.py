@@ -169,3 +169,15 @@ def test_what_counts_as_a_station_change():
     assert not facts.station_changed("Bethe City", None, "Bethe City", "coriolis")      # type unknown
     assert not facts.station_changed("Two Jumps", "fleetcarrier", "Two Jumps", "surfacestation")
     assert not facts.station_changed("galileo", "ocellus", "Galileo", "ocellus")        # letter case
+
+
+def test_station_judged_at_message_time_and_construction_names_skipped():
+    from datetime import datetime, timezone
+    known = {3715199232: ("K1K-64X", "FleetCarrier", datetime(2026, 9, 12, tzinfo=timezone.utc), None),
+             4362485507: ("Allegro Centre", None, datetime(2026, 10, 1, tzinfo=timezone.utc), "X")}
+    replay = {"MarketID": 3715199232, "StationName": "F1B-6VZ", "StationType": "FleetCarrier"}
+    june, september = datetime(2026, 6, 10, tzinfo=timezone.utc), datetime(2026, 9, 12, tzinfo=timezone.utc)
+    pairs = pairing.compare_all(replay, "journal/1:Docked", september, june, "journal", {}, {}, known, {})
+    assert pairs["station"] is None                    # a June docking is not judged by September's record
+    site = {"MarketID": 4362485507, "Name": "Planetary Construction Site: Goto Terminus", "StarSystem": "X"}
+    assert pairing.compare_station("approachsettlement/1", site, datetime(2026, 10, 1, tzinfo=timezone.utc), known) is None
