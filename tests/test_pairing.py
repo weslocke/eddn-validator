@@ -181,3 +181,16 @@ def test_station_judged_at_message_time_and_construction_names_skipped():
     assert pairs["station"] is None                    # a June docking is not judged by September's record
     site = {"MarketID": 4362485507, "Name": "Planetary Construction Site: Goto Terminus", "StarSystem": "X"}
     assert pairing.compare_station("approachsettlement/1", site, datetime(2026, 10, 1, tzinfo=timezone.utc), known) is None
+
+
+def test_system_compared_only_for_the_same_station_and_generic_type_skipped():
+    from datetime import datetime, timezone
+    aug, april = datetime(2026, 8, 15, tzinfo=timezone.utc), datetime(2026, 4, 18, tzinfo=timezone.utc)
+    known = {4353087235: ("Ricardo Platform", "Outpost", aug, "Shui Wei Sector JI-S b4-7")}
+    other = {"marketId": 4353087235, "stationName": "Eesuola Dock", "systemName": "Col 285 Sector TP-O d6-19"}
+    assert pairing.compare_station("commodity/3", other, april, known) is None       # reissued ID
+    moved = {"marketId": 4353087235, "stationName": "Ricardo Platform", "systemName": "Col 285 Sector TP-O d6-19"}
+    assert pairing.compare_station("commodity/3", moved, april, known)[1] == 1         # same station, wrong system
+    generic = {"MarketID": 4353087235, "StationName": "Ricardo Platform", "StationType": "SurfaceStation",
+               "StarSystem": "Shui Wei Sector JI-S b4-7"}
+    assert pairing.compare_station("journal/1:Docked", generic, aug, known) == (2, 0, {})

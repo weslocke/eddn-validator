@@ -184,6 +184,7 @@ def compare_station(event_type: str, message: dict, gw_ts, known: dict) -> tuple
     out: dict = {}
     # Name and type change (carrier renames, station rebuilds): compare against the station as
     # it was when the report was made (facts.station_state_at), and only a recent record of it.
+    names_on_record = {n.lower() for n in (ref_name, previous[0]) if n}
     state = facts.station_state_at(gw_ts, (ref_name, ref_type, last_seen, *previous))
     if state is not None:
         ref_name, ref_type, seen = state
@@ -193,14 +194,18 @@ def compare_station(event_type: str, message: dict, gw_ts, known: dict) -> tuple
             if name.lower() != ref_name.lower():
                 mismatched += 1
                 _mismatch(out, "StationName", name, ref_name)
-        if kind and ref_type:
+        # SurfaceStation is the game's generic type (also written for orbital stations): no verdict.
+        if kind and ref_type and "surfacestation" not in (kind, facts.station_type_key(ref_type)):
             compared += 1
             if kind != facts.station_type_key(ref_type):
                 mismatched += 1
                 _mismatch(out, "StationType", kind, ref_type)
-    # Which system a station is in never changes, unless it is a carrier/megaship.
+    # Which system a station is in never changes, unless it is a carrier/megaship. Compared only
+    # when the report names the station we have on record: colony-era MarketIDs are reissued to
+    # other stations elsewhere, and a different name means a different station, not a wrong system.
     system, _ = facts.station_system(event_type, message)
-    if system and ref_system and not facts.moving_station(market, kind or facts.station_type_key(ref_type)):
+    same_station = not name or not names_on_record or name.lower() in names_on_record
+    if system and ref_system and same_station and not facts.moving_station(market, kind or facts.station_type_key(ref_type)):
         compared += 1
         if system != ref_system:
             mismatched += 1
