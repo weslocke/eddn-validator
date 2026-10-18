@@ -24,3 +24,10 @@ def test_weak_spots_need_enough_data_and_a_grade_below_c():
             row("codexentry/1", None, 3, confidence="insufficient")]
     spots = weak_spots(rows, GRADES)
     assert [(s["event_type"], s["grade"]) for s in spots] == [("commodity/3", "F"), ("shipyard/2", "D")]
+
+
+def test_outage_ranges_from_config():
+    from eddn_validator.config import outage_ranges
+    assert outage_ranges({"eddn_outages": [["2026-06-30T07:00:00Z", "2026-07-02T01:00:00Z"]]}) == \
+        ["[2026-06-30T07:00:00Z,2026-07-02T01:00:00Z)"]
+    assert outage_ranges({}) == []

@@ -173,8 +173,12 @@ FIRST_COLONY_ID = 4_200_000_000
 TEMPORARY_NAMES = ("planetary construction site:", "orbital construction site:")
 
 
+# Rescue ships (3.4e9): Frontier renumbers them at weekly maintenance (EDCD #eddn, 2019-2022).
+RESCUE_RANGE = range(3_400_000_000, 3_500_000_000)
+
+
 def temporary_station(market: int, kind: str | None, name: str | None = None) -> bool:
-    return (kind in TEMPORARY_TYPES or market in COLONISATION_RANGE
+    return (kind in TEMPORARY_TYPES or market in COLONISATION_RANGE or market in RESCUE_RANGE
             or (isinstance(name, str) and name.lower().startswith(TEMPORARY_NAMES)))
 
 

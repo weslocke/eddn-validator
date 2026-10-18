@@ -76,3 +76,8 @@ class ReferenceApps:
 
     def group_for(self, software_name: str) -> str | None:
         return self.group_by_name.get(software_name)
+
+
+def outage_ranges(cfg: dict) -> list[str]:
+    """scoring.yaml eddn_outages as tstzrange literals (start included, end excluded)."""
+    return [f"[{start},{end})" for start, end in cfg.get("eddn_outages") or []]

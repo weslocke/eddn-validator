@@ -400,6 +400,10 @@ def odyssey_without_horizons(ctx: Ctx) -> str | None:
     # LoadGame, so it may legitimately disagree with the journal's odyssey flag.
     if ctx.gv.startswith("CAPI-"):
         return None
+    # On outfitting and shipyard, horizons has meant "the list holds Horizons-only items", taken
+    # from Outfitting.json / Shipyard.json (EDCD #eddn, 2019 and 2021), not LoadGame's flag.
+    if ctx.schema_name in ("outfitting/2", "outfitting/3", "shipyard/2"):
+        return None
     if ctx.message.get("odyssey") is True and ctx.message.get("horizons") is False:
         return "odyssey true with horizons false"
     return None

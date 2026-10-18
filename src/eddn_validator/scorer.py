@@ -25,7 +25,7 @@ from datetime import datetime, timedelta, timezone
 
 import psycopg
 
-from .config import Settings
+from .config import Settings, outage_ranges
 from .paths import Flat, flatten, string_shape, type_family
 from .rules import Finding, Rule, evaluate, load_rules
 from .subtypes import subtype
@@ -456,8 +456,10 @@ class Scorer:
                 SELECT r.days, x.event_type, x.branch, x.is_test, x.game_version,
                        count(*), min(x.gw_ts),
                        count(*) FILTER (WHERE x.gap <= make_interval(hours => %s)),
-                       count(*) FILTER (WHERE x.gw_ts - x.msg_ts > make_interval(mins => %s)),
-                       count(*) FILTER (WHERE x.msg_ts > x.gw_ts + make_interval(mins => %s)),
+                       count(*) FILTER (WHERE x.gw_ts - x.msg_ts > make_interval(mins => %s)
+                                          AND NOT x.gw_ts <@ ANY(%s::tstzrange[])),
+                       count(*) FILTER (WHERE x.msg_ts > x.gw_ts + make_interval(mins => %s)
+                                          AND NOT x.gw_ts <@ ANY(%s::tstzrange[])),
                        count(*) FILTER (WHERE x.gap BETWEEN interval '25 seconds' AND interval '150 seconds')
                   FROM (SELECT event_type, branch, is_test, game_version, gw_ts, msg_ts,
                                gw_ts - lag(gw_ts) OVER (PARTITION BY content_hash ORDER BY gw_ts) AS gap
@@ -470,8 +472,8 @@ class Scorer:
                        unnest(%s::int[]) r(days)
                  WHERE x.gw_ts > now() - make_interval(days => r.days)
                  GROUP BY 1, 2, 3, 4, 5
-                """, (dup_hours, c["stale_after_minutes"], c["future_after_minutes"], app_id, version,
-                      max(ranges), dup_hours, list(ranges))).fetchall()
+                """, (dup_hours, c["stale_after_minutes"], outage_ranges(c), c["future_after_minutes"],
+                      outage_ranges(c), app_id, version, max(ranges), dup_hours, list(ranges))).fetchall()
             burst = self._bursts(app_id, version, ranges, other)
         counts: dict = defaultdict(list)
         sums: dict = defaultdict(lambda: [0, 0, 0, 0, 0])

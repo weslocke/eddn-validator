@@ -57,6 +57,12 @@ values:
 behaviour_baseline_exclude: [EDOMH]
 duplicate_window_hours: 24   # a repeat of an identical message within this long is a duplicate
 stale_after_minutes: 60
+# EDDN's own outages (gateway time, UTC). Messages it released late afterwards are not the
+# senders' doing, so late and future-dated messages received inside these windows are not
+# counted (in an app's rates or the reference baseline). The late rate, normally ~7%, was
+# 35-100% throughout this one.
+eddn_outages:
+  - ["2026-06-30T07:00:00Z", "2026-07-02T01:00:00Z"]   # move to Inara's server in Prague
 future_after_minutes: 5
 burst_per_second: 20
 

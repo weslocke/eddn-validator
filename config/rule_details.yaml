@@ -116,7 +116,7 @@ GEN-025:
   passes: {header: {gameversion: 3.8.0.407, gamebuild: "r269979/r0 "}, message: {odyssey: (left out)}}
 
 GEN-026:
-  how: "odyssey is true while horizons is false. The game never writes that pair, so the sender made up one of the flags. CAPI-sourced data is not checked, because its horizons flag is inferred from the station."
+  how: "odyssey is true while horizons is false. The game never writes that pair, so the sender made up one of the flags. CAPI-sourced data is not checked, because its horizons flag is inferred from the station, and neither are outfitting and shipyard, where horizons says whether the lists hold Horizons-only items."
   fails: {message: {horizons: false, odyssey: true}}
   passes: {message: {horizons: true, odyssey: true}}
 

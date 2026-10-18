@@ -364,3 +364,8 @@ def test_rule_details_examples(rule_id):
 def test_every_enabled_rule_has_details():
     enabled = {k for k, v in CONFIG["rules"].items() if v.get("enabled", True)}
     assert enabled == set(DETAILS)
+
+
+def test_gen026_not_on_outfitting_or_shipyard():
+    env = mutate("shipyard/2", lambda m: m.update(horizons=False, odyssey=True))
+    assert "GEN-026" not in ids(env)

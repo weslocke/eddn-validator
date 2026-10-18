@@ -76,6 +76,7 @@ and the check is reliable; <em>minor</em> when the check is a heuristic, or the 
   <tr><td><code>duplicate_window_hours</code></td><td class="num">{{ sc.duplicate_window_hours }}</td><td>An identical message (same content hash) within this long of its previous copy is a duplicate</td></tr>
   <tr><td><code>stale_after_minutes</code></td><td class="num">{{ sc.stale_after_minutes }}</td><td>Gateway time minus event time above this: late</td></tr>
   <tr><td><code>future_after_minutes</code></td><td class="num">{{ sc.future_after_minutes }}</td><td>Event time ahead of gateway time by more than this: future-dated</td></tr>
+  <tr><td><code>eddn_outages</code></td><td>{% for s, e in sc.eddn_outages or [] %}{{ s[:16] | replace("T", " ") }} to {{ e[:16] | replace("T", " ") }} UTC{% if not loop.last %}<br>{% endif %}{% endfor %}</td><td>EDDN's own outages: late and future-dated messages received in these windows are not counted, since EDDN released them late, not the sender</td></tr>
   <tr><td><code>burst_per_second</code></td><td class="num">{{ sc.burst_per_second }}</td><td>Messages of one event type in one second at or above this: a burst</td></tr>
   <tr><td><code>behaviour_baseline_exclude</code></td><td>{{ sc.behaviour_baseline_exclude | join(", ") }}</td><td>Reference apps left out of the behaviour allowance (they re-send old journal entries on start-up)</td></tr>
   <tr><td>Window</td><td>all on file</td><td>One card per version over every message still held (about six months); the reference apps' own cards cover their last 7 days</td></tr>

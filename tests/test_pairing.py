@@ -217,3 +217,8 @@ def test_colony_era_system_only_against_a_recent_record():
     assert pairing.compare_station("journal/1:Docked", erebor, oct3, known)[1] == 1
     old = {"MarketID": 128000001, "StationName": "Old Port", "StationType": "Orbis", "StarSystem": "Lave"}
     assert pairing.compare_station("journal/1:Docked", old, aug28, known) == (1, 1, {"system": ["Lave", "Sol"]})
+
+
+def test_rescue_ships_are_temporary():
+    assert facts.temporary_station(3_412_345_678, "megaship")
+    assert not facts.temporary_station(3_228_806_656, "orbis")

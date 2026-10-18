@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 
 import psycopg
 
+from .config import outage_ranges
 from .paths import flatten, string_shape
 from .rules import Rule, evaluate
 from .subtypes import subtype
@@ -144,8 +145,10 @@ SELECT m.event_type, m.branch, m.source, m.payload->'message', m.payload
 BASELINE = """
 SELECT ref_group, event_type, count(*),
        count(*) FILTER (WHERE gap <= make_interval(hours => %(dup_hours)s)),
-       count(*) FILTER (WHERE gw_ts - msg_ts > make_interval(mins => %(stale)s)),
-       count(*) FILTER (WHERE msg_ts > gw_ts + make_interval(mins => %(future)s))
+       count(*) FILTER (WHERE gw_ts - msg_ts > make_interval(mins => %(stale)s)
+                          AND NOT gw_ts <@ ANY(%(outages)s::tstzrange[])),
+       count(*) FILTER (WHERE msg_ts > gw_ts + make_interval(mins => %(future)s)
+                          AND NOT gw_ts <@ ANY(%(outages)s::tstzrange[]))
   FROM (SELECT a.ref_group, m.event_type, m.gw_ts, m.msg_ts,
                m.gw_ts - lag(m.gw_ts) OVER (PARTITION BY m.app_id, m.content_hash ORDER BY m.gw_ts) AS gap
           FROM messages m JOIN apps a ON a.id = m.app_id
@@ -205,7 +208,8 @@ def build(conn: psycopg.Connection, rules: list[Rule], cfg: dict) -> None:
         rows.append((et, sub, branch, group, acc.n, json.dumps(profile), now))
     per_type: dict[str, dict[str, dict]] = defaultdict(dict)
     thresholds = {"dup_hours": int(cfg.get("duplicate_window_hours", 24)),
-                  "stale": int(cfg["stale_after_minutes"]), "future": int(cfg["future_after_minutes"])}
+                  "stale": int(cfg["stale_after_minutes"]), "future": int(cfg["future_after_minutes"]),
+                  "outages": outage_ranges(cfg)}
     with conn.transaction():
         _big_query_settings(conn)
         baseline_rows = conn.execute(BASELINE, thresholds).fetchall()

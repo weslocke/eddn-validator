@@ -931,3 +931,14 @@ Then 707 (0.047%) remained, and three more patterns were ours:
 - System names were compared with letter case ("delphi" against "Delphi"). They are now compared ignoring case.
 - PowerPlay Stronghold Carriers are named in the player's language: a reference app recorded "Porte-vaisseaux de forteresse". Their names are not compared.
 - Colony-era stations do change system. "Erebor" (MarketID 4274944003) was reported by the reference apps in HIP 7860 until 2026-09-09 and in Col 285 Sector RI-R c5-10 from 2026-09-28, so other apps' August reports were right. For MarketIDs from 4.2e9 up, the system is compared only against a record from within 7 days of the report. Original-galaxy stations, which never move, keep the any-age comparison.
+
+## 36. Leads from the EDCD #eddn Discord (2026-10-18)
+
+The whole #eddn channel (24,014 messages, 2016–2026) was read for anything bearing on the validator. 1,246 findings with authors, dates and message IDs are in docs/research/eddn-discord-findings.md (gitignored, private). Most confirm the design. These were checked against our data and acted on:
+
+- **GEN-025 confirmed.** The maintainers' position (2022) is that a Legacy 3.8 LoadGame has no Odyssey key and the flag must be left out. EDMC and EDDiscovery still send `odyssey: false`, and today's maintainers tell Live from Legacy by gameversion. Rule kept, minor.
+- **GEN-040 kept.** A 2026-07 statement that the gateway now strips repeated list items does not match the data. Repeats still reach the relay, in 13% of EDMC's outfitting/2, 88% of EDDLite's and 80% of EDDI's.
+- **GEN-026 no longer applies to outfitting and shipyard.** There, `horizons` was defined as "the list holds Horizons-only items", from Outfitting.json and Shipyard.json (2019, 2021). One message on the current cards was affected.
+- **Rescue ships (MarketID 3.4e9) are not paired on station details.** Frontier renumbers them at weekly maintenance.
+- **EDDN's own outage is excluded from late and future-dated counts** (`eddn_outages`, 2026-06-30 07:00 to 2026-07-02 01:00 UTC, the move to Inara's Prague server). The late rate, normally about 7%, was 35–100% for those 42 hours: 587,000 of EDMC (Windows)'s 1.24 million messages, and all of EDAstro's. Weekly maintenance shows small late bursts too, but they are a few thousand messages, partly senders replaying journals while the game is down, and are left alone.
+- **No change needed:** events the game itself writes twice (FSSAllBodiesFound about 16% and DockingDenied 2–5% at every reference app) are already absorbed, since behaviour counts only the excess over the reference apps. The community's personal-data key list is already rejected by EDDN's journal schema, so GEN-034 needs nothing more.
