@@ -907,3 +907,15 @@ This enforces the developer guide's MUST (Dev:444-456: cross-check the system na
 Outrider 2026.10.24 showed station-pairing disagreements, all on MarketID 3958572546. The reference record (last seen Oct 11) was "Orbital Construction Site: Rahman Relay", a space construction depot in Col 285 Sector WD-M b22-4. Outrider reported it, correctly, on Oct 17–18 as the colonisation ship "Malaspina Depot" in Col 359 Sector RS-T d3-106. The game reuses colonisation's temporary-station IDs once a build finishes. In 30 days the reference apps themselves reported 2,332 space-depot IDs, 175 colonisation-ship IDs and 15 planetary-depot IDs in more than one system. A planetary depot's ID also appears to pass to the station built there.
 
 Station pairing now skips a station when either the report or the record is temporary (`facts.temporary_station`): a space or planetary construction depot by type, or any ID in 3.95–4.0e9. That block holds only depots, colonisation ships (typed SurfaceStation) and untyped stations. Station records still update from newer reference reports as before. Station pairs already stored for these stations were cleared.
+
+## 35. Stations judged as they were when reported (2026-10-18)
+
+Outrider 2026.10.18 had a station disagreement on MarketID 128016640. It reported "Abraham Lincoln" (Orbis) on Oct 8. From Oct 15 18:04 UTC every reference app reports that ID as "Galileo" (Ocellus), from the game's own Docked events. Station records kept only the latest state and compared name and type against any record within 7 days of a report, before or after it, so a correct report from before a change was judged against the new state.
+
+Each station record now also holds its previous name and type, when the previous state was last reported (`prev_seen_until`), and when the current one was first reported (`state_since`) (migration 0014). The fact upsert records a change when a newer reference report differs in name (ignoring case) or type (stored normalised, so Ocellus and Bernal are one type). Pairing compares a report against the state current at its time (`facts.station_state_at`): the previous state before the change, the current state after it. A report from between the two, or from an overlap, gets no name or type comparison. The 7-day freshness rule then applies to whichever state is used.
+
+History was backfilled from the reference apps' Docked, docking and docked-Location reports, which come from the game. A previous state needs at least two reports, so one stray report cannot create a change. Mismatched station pairs were cleared and all history re-paired.
+
+Remaining limit: a report of a change no reference app has seen yet still disagrees with the record until one does. For busy stations that is minutes.
+
+DESIGN §34 corrected by a check of the EDDN archive: the 3.22–3.30e9 MarketIDs are original stations (June 2024 dockings at Coriolis, Outpost, Orbis and Ocellus stations there), not colony-built. Colony stations use 4.2e9+ (EDCD Discord, March 2025: depots and colonisation ships 395xxxxxxx, built stations 42xxxxxxxx, a planetary depot's station keeping its ID).

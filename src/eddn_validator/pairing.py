@@ -174,14 +174,19 @@ def compare_station(event_type: str, message: dict, gw_ts, known: dict) -> tuple
     if not station or station[0] not in known:
         return None
     market, name, kind = station
-    ref_name, ref_type, last_seen, ref_system = known[market]
+    ref_name, ref_type, last_seen, ref_system, *previous = known[market]
+    previous = (previous + [None] * 4)[:4]
     # A recycled colonisation ID (facts.temporary_station): either side may be a different station.
     if facts.temporary_station(market, kind) or facts.temporary_station(market, facts.station_type_key(ref_type)):
         return None
     compared = mismatched = 0
     out: dict = {}
-    # Name and type change (carrier renames, station rebuilds): compare only recent facts.
-    if abs(gw_ts - last_seen) <= STATION_FRESH:
+    # Name and type change (carrier renames, station rebuilds): compare against the station as
+    # it was when the report was made (facts.station_state_at), and only a recent record of it.
+    state = facts.station_state_at(gw_ts, (ref_name, ref_type, last_seen, *previous))
+    if state is not None:
+        ref_name, ref_type, seen = state
+    if state is not None and abs(gw_ts - seen) <= STATION_FRESH:
         if name and ref_name:
             compared += 1
             if name.lower() != ref_name.lower():
@@ -271,8 +276,9 @@ def pair_messages(conn: psycopg.Connection, deadline: float, upto: int | None = 
                               addresses)
         rows_b = facts.lookup_bodies(conn, "system_address, body_id, body_name, static, pinned", bodies)
         rows_m = facts.lookup(conn, "SELECT market_id, station_name, station_type, last_seen,"
-                                    " star_system, pinned FROM facts_station WHERE market_id = ANY(%s)",
-                              markets)
+                                    " star_system, pinned, prev_station_name, prev_station_type,"
+                                    " prev_seen_until, state_since FROM facts_station"
+                                    " WHERE market_id = ANY(%s)", markets)
         known_systems = {r[0]: (r[1], r[2]) for r in rows_s}
         # Claims whose address has no fact, where only the name can show a wrong address.
         names = {name for _, _, _, _, _, _, _, m, _ in messages for a, name, _ in facts.systems_in(m)
@@ -283,7 +289,7 @@ def pair_messages(conn: psycopg.Connection, deadline: float, upto: int | None = 
                       " WHERE NOT conflict AND star_system = ANY(%s)", names):
             by_name.setdefault(name, []).append((address, pos))
         known_bodies = {(r[0], r[1]): (r[2], r[3]) for r in rows_b}
-        known_stations = {r[0]: (r[1], r[2], r[3], r[4]) for r in rows_m}
+        known_stations = {r[0]: (r[1], r[2], r[3], r[4], r[6], r[7], r[8], r[9]) for r in rows_m}
         # Facts another app has now reported are kept for good (retention skips pinned rows).
         to_pin = ([r[0] for r in rows_s if not r[3]], [(r[0], r[1]) for r in rows_b if not r[4]],
                   [r[0] for r in rows_m if not r[5]])

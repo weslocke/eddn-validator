@@ -321,8 +321,12 @@ class Batch:
                 market, name, kind = station
                 st = self.stations.setdefault(market, {"name": None, "type": None, "n": 0,
                                                        "last": gw_ts, "system": None,
-                                                       "address": None, "system_seen": None})
+                                                       "address": None, "system_seen": None,
+                                                       "since": gw_ts})
                 if gw_ts >= st["last"] or st["name"] is None:
+                    if (name and st["name"] and name.lower() != st["name"].lower()) or (
+                            kind and st["type"] and kind != st["type"]):
+                        st["since"] = gw_ts     # changed within the batch: the new state starts here
                     st["name"] = name or st["name"]
                     st["type"] = kind or st["type"]
                 system, address = station_system(event_type, message)
@@ -430,9 +434,19 @@ def store(conn: psycopg.Connection, batch: Batch) -> None:
             cur.executemany(
                 """
                 INSERT INTO facts_station (market_id, station_name, station_type, obs_count, last_seen,
-                                           star_system, system_address, system_seen)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                                           star_system, system_address, system_seen, state_since)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (market_id) DO UPDATE SET
+                    -- A newer report naming or typing the station differently is a change: keep the
+                    -- old state and when each was seen (SET reads the row as it was before).
+                    prev_station_name = CASE WHEN {changed} THEN facts_station.station_name
+                                             ELSE facts_station.prev_station_name END,
+                    prev_station_type = CASE WHEN {changed} THEN facts_station.station_type
+                                             ELSE facts_station.prev_station_type END,
+                    prev_seen_until = CASE WHEN {changed} THEN facts_station.last_seen
+                                           ELSE facts_station.prev_seen_until END,
+                    state_since = CASE WHEN {changed} THEN EXCLUDED.state_since
+                                       ELSE facts_station.state_since END,
                     star_system = CASE WHEN EXCLUDED.system_seen >= coalesce(facts_station.system_seen, '-infinity')
                                        THEN coalesce(EXCLUDED.star_system, facts_station.star_system)
                                        ELSE facts_station.star_system END,
@@ -451,15 +465,35 @@ def store(conn: psycopg.Connection, batch: Batch) -> None:
                                         ELSE facts_station.station_type END,
                     obs_count = facts_station.obs_count + EXCLUDED.obs_count,
                     last_seen = GREATEST(facts_station.last_seen, EXCLUDED.last_seen)
-                """,
+                """.replace("{changed}", STATION_CHANGED),
                 [(m, s["name"], s["type"], s["n"], s["last"], s["system"], s["address"],
-                  s["system_seen"]) for m, s in sorted(batch.stations.items())])
+                  s["system_seen"], s["since"]) for m, s in sorted(batch.stations.items())])
 
     if batch.markets:
         with conn.cursor() as cur:
             cur.executemany(
                 "INSERT INTO facts_market (market_id, observed_at, source, ref_group, commodities)"
                 " VALUES (%s, %s, %s, %s, %s)", batch.markets)
+
+
+STATION_CHANGED = """(EXCLUDED.last_seen >= facts_station.last_seen AND (
+    (EXCLUDED.station_name IS NOT NULL AND facts_station.station_name IS NOT NULL
+     AND lower(EXCLUDED.station_name) <> lower(facts_station.station_name))
+    OR (EXCLUDED.station_type IS NOT NULL AND facts_station.station_type IS NOT NULL
+        AND EXCLUDED.station_type <> facts_station.station_type)))"""
+
+
+def station_state_at(t, fact: tuple) -> tuple[str | None, str | None, object] | None:
+    """The (name, type, seen) a station record says the station had at time t, or None when t
+    falls where the state is unknown: between a change's last old report and first new one, or
+    in an overlap of the two. fact: (name, type, last_seen, prev_name, prev_type,
+    prev_seen_until, state_since)."""
+    name, kind, last_seen, prev_name, prev_kind, prev_until, since = fact
+    if prev_until is None or since is None or (t >= since and t >= prev_until):
+        return name, kind, last_seen
+    if t < since and t <= prev_until:
+        return prev_name, prev_kind, prev_until
+    return None
 
 
 BACKFILL_STATION_SYSTEMS = """

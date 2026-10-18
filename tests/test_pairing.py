@@ -134,3 +134,30 @@ def test_recycled_colonisation_ids_are_not_compared():
     assert pairing.compare_station("journal/1:Docked", built, now, known) is None   # depot finished
     moved = {"MarketID": 128016640, "StationName": "Abraham Lincoln", "StationType": "Orbis", "StarSystem": "Lave"}
     assert pairing.compare_station("journal/1:Docked", moved, now, known)[1] == 1    # permanent: still checked
+
+
+def test_station_judged_as_it_was_when_reported():
+    from datetime import datetime, timedelta, timezone
+    t = lambda d, h=0: datetime(2026, 10, d, h, tzinfo=timezone.utc)
+    # 128016640 was Abraham Lincoln (Orbis) until Oct 15 17:00, Galileo (Ocellus) from Oct 15 18:04.
+    galileo = ("Galileo", "Ocellus", t(18, 17), "Sol", "Abraham Lincoln", "orbis", t(15, 17), t(15, 18))
+    old = {"MarketID": 128016640, "StationName": "Abraham Lincoln", "StationType": "Orbis", "StarSystem": "Sol"}
+    new = {"MarketID": 128016640, "StationName": "Galileo", "StationType": "Ocellus", "StarSystem": "Sol"}
+    known = {128016640: galileo}
+    assert pairing.compare_station("journal/1:Docked", old, t(15, 10), known) == (3, 0, {})   # as it was
+    assert pairing.compare_station("journal/1:Docked", new, t(17), known) == (3, 0, {})
+    assert pairing.compare_station("journal/1:Docked", old, t(17), known)[1] == 2            # stale name
+    between = pairing.compare_station("journal/1:Docked", old, t(15, 17) + timedelta(minutes=30), known)
+    assert between == (1, 0, {})                       # unknown which state: system only
+    assert facts.station_state_at(t(1), galileo[:3] + galileo[4:])[0] == "Abraham Lincoln"
+
+
+def test_batch_marks_when_a_station_changes():
+    from datetime import datetime, timezone
+    t = lambda h: datetime(2026, 10, 15, h, tzinfo=timezone.utc)
+    batch = facts.Batch()
+    for h, name in ((10, "Abraham Lincoln"), (12, "Abraham Lincoln"), (18, "Galileo"), (19, "Galileo")):
+        batch.add("journal/1:Docked", {"MarketID": 128016640, "StationName": name, "StationType": "Ocellus",
+                                       "StarSystem": "Sol"}, "live", "journal", "EDMC", t(h), t(h))
+    st = batch.stations[128016640]
+    assert (st["name"], st["since"], st["last"]) == ("Galileo", t(18), t(19))
