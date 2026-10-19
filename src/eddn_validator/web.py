@@ -30,6 +30,7 @@ from starlette.requests import Request
 
 from . import db
 from .config import RO_ROLE, Settings
+from .scorer import ALL_VERSIONS
 from .web_tips import (BEHAVIOUR_TIPS, GAMEVERSION_TIPS, PAIR_TIPS, SEVERITY_TIPS, VALUE_TIPS,
                        annotate)
 from .web_tips import STATIC as TIPS
@@ -264,8 +265,17 @@ def load_card(app_id: int, version: str) -> dict | None:
             "SELECT s.version, s.event_types, v.last_seen FROM scorecards s"
             "  JOIN app_versions v ON v.app_id = s.app_id AND v.version = s.version"
             " WHERE s.app_id = %s AND s.version <> %s", (app_id, version)).fetchall()
+        summary = None if version == ALL_VERSIONS else conn.execute(
+            "SELECT score, grade, messages, weak_spots, event_types, card->'version_count',"
+            " card->>'oldest' FROM scorecards WHERE app_id = %s AND version = %s",
+            (app_id, ALL_VERSIONS)).fetchone()
     card = row[0]
     split_not_sent(card, others)
+    if summary:
+        score, grade, messages, weak, types, count, oldest = summary
+        card["all_summary"] = {"score": score, "grade": grade, "messages": messages,
+                               "weak_spots": weak or [], "event_types": len(types or {}),
+                               "version_count": count, "oldest": oldest}
     return card
 
 

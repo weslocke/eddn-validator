@@ -439,16 +439,16 @@ class Scorer:
         self.now = datetime.now(timezone.utc)
 
     # -- queries ---------------------------------------------------------
-    def _counts_and_behaviour(self, app_id: int, version: str, ranges: tuple[int, ...],
+    def _counts_and_behaviour(self, app_id: int, versions: list[str], ranges: tuple[int, ...],
                               other: bool = False) -> tuple[dict, dict]:
-        """_counts and _behaviour in one pass over the version's messages (A6 in
+        """_counts and _behaviour in one pass over the versions' messages (A6 in
         docs/research/db-performance-2026-10-14.md): grouped at the finer counts key, with the
         behaviour figures summed per event type here. Same results as the two separate queries."""
         c = self.cfg
         dup_hours = int(c.get("duplicate_window_hours", 24))
         with self.conn.transaction():
             # No parallel workers (their sorts share the database container's 64 MB /dev/shm and
-            # fail with DiskFull on a big version), and room to sort in memory.
+            # fail with DiskFull on a big versions), and room to sort in memory.
             self.conn.execute("SET LOCAL max_parallel_workers_per_gather = 0")
             self.conn.execute("SET LOCAL work_mem = '256MB'")
             rows = self.conn.execute(
@@ -464,7 +464,7 @@ class Scorer:
                   FROM (SELECT event_type, branch, is_test, game_version, gw_ts, msg_ts,
                                gw_ts - lag(gw_ts) OVER (PARTITION BY content_hash ORDER BY gw_ts) AS gap
                           FROM messages
-                         WHERE app_id = %s AND software_version = %s """ + _other(other) + """
+                         WHERE app_id = %s AND software_version = ANY(%s) """ + _other(other) + """
                            -- reach back one duplicate window further, so the first messages in
                            -- the range can see their earlier copies (as profiles.BASELINE does);
                            -- the outer bound keeps everything counted inside the range
@@ -473,8 +473,8 @@ class Scorer:
                  WHERE x.gw_ts > now() - make_interval(days => r.days)
                  GROUP BY 1, 2, 3, 4, 5
                 """, (dup_hours, c["stale_after_minutes"], outage_ranges(c), c["future_after_minutes"],
-                      outage_ranges(c), app_id, version, max(ranges), dup_hours, list(ranges))).fetchall()
-            burst = self._bursts(app_id, version, ranges, other)
+                      outage_ranges(c), app_id, versions, max(ranges), dup_hours, list(ranges))).fetchall()
+            burst = self._bursts(app_id, versions, ranges, other)
         counts: dict = defaultdict(list)
         sums: dict = defaultdict(lambda: [0, 0, 0, 0, 0])
         for days, et, branch, is_test, gv, n, oldest, dups, stale, future, resends in rows:
@@ -489,23 +489,23 @@ class Scorer:
                                    "resend": resends / n}
         return counts, behaviour
 
-    def _bursts(self, app_id: int, version: str, ranges: tuple[int, ...], other: bool) -> dict:
+    def _bursts(self, app_id: int, versions: list[str], ranges: tuple[int, ...], other: bool) -> dict:
         rows = self.conn.execute(
             """
             SELECT r.days, b.event_type, sum(b.c) FROM (
                 SELECT m.event_type, date_trunc('second', m.gw_ts) AS s, count(*) AS c,
                        max(m.gw_ts) AS t
                   FROM messages m
-                 WHERE m.app_id = %s AND m.software_version = %s """ + _other(other, "m.") + """
+                 WHERE m.app_id = %s AND m.software_version = ANY(%s) """ + _other(other, "m.") + """
                    AND m.gw_ts > now() - make_interval(days => %s)
                  GROUP BY 1, 2 HAVING count(*) >= %s
             ) b, unnest(%s::int[]) r(days)
             WHERE b.t > now() - make_interval(days => r.days)
             GROUP BY 1, 2
-            """, (app_id, version, max(ranges), self.cfg["burst_per_second"], list(ranges))).fetchall()
+            """, (app_id, versions, max(ranges), self.cfg["burst_per_second"], list(ranges))).fetchall()
         return {(d, et): float(n) for d, et, n in rows}
 
-    def _sample(self, app_id: int, version: str, event_types: list[str],
+    def _sample(self, app_id: int, versions: list[str], event_types: list[str],
                  max_days: int, branches: dict[str, set[str]] | None = None) -> list[Msg]:
         """Newest messages per event type, each read through messages_app_idx. When a branch
         the version sent (branches: event type -> {"live", "legacy"}) is absent from that
@@ -514,7 +514,7 @@ class Scorer:
             # No parallel workers: a branch sample of a busy version scans a lot of rows, and a
             # parallel scan needs the database container's 64 MB /dev/shm (DiskFull otherwise).
             self.conn.execute("SET LOCAL max_parallel_workers_per_gather = 0")
-            rows_by_type = self._sample_rows(app_id, version, event_types, max_days, branches)
+            rows_by_type = self._sample_rows(app_id, versions, event_types, max_days, branches)
         msgs = []
         for rows in rows_by_type:
             for gw_ts, et, branch, source, envelope in rows:
@@ -526,7 +526,7 @@ class Scorer:
                                 evaluate(self.rules, envelope)))
         return msgs
 
-    def _sample_rows(self, app_id: int, version: str, event_types: list[str], max_days: int,
+    def _sample_rows(self, app_id: int, versions: list[str], event_types: list[str], max_days: int,
                      branches: dict[str, set[str]] | None) -> list[list]:
         per = int(self.cfg["sample_per_event_type"])
         out = []
@@ -535,27 +535,27 @@ class Scorer:
                 """
                 SELECT gw_ts, event_type, branch, source, payload
                   FROM messages
-                 WHERE app_id = %s AND software_version = %s AND event_type = %s
+                 WHERE app_id = %s AND software_version = ANY(%s) AND event_type = %s
                    AND gw_ts > now() - make_interval(days => %s)
                  ORDER BY gw_ts DESC
                  LIMIT %s
-                """, (app_id, version, event_type, max_days, per)).fetchall()
+                """, (app_id, versions, event_type, max_days, per)).fetchall()
             sampled = {"legacy" if r[2] == "legacy" else "live" for r in rows}
             for missing in (branches or {}).get(event_type, set()) - sampled:
                 rows += self.conn.execute(
                     """
                     SELECT gw_ts, event_type, branch, source, payload
                       FROM messages
-                     WHERE app_id = %s AND software_version = %s AND event_type = %s
+                     WHERE app_id = %s AND software_version = ANY(%s) AND event_type = %s
                        AND gw_ts > now() - make_interval(days => %s)
                        AND (branch = 'legacy') = %s
                      ORDER BY gw_ts DESC
                      LIMIT %s
-                    """, (app_id, version, event_type, max_days, missing == "legacy", per)).fetchall()
+                    """, (app_id, versions, event_type, max_days, missing == "legacy", per)).fetchall()
             out.append(rows)
         return out
 
-    def _pairs(self, app_id: int, version: str) -> dict:
+    def _pairs(self, app_id: int, versions: list[str]) -> dict:
         out: dict = defaultdict(lambda: defaultdict(lambda: {"kinds": {}, "fields": Counter(),
                                                              "examples": []}))
         for days, et, kind, n, bad, compared, mismatched in self.conn.execute(
@@ -563,10 +563,10 @@ class Scorer:
                 SELECT r.days, p.event_type, p.pair_kind, count(*), count(*) FILTER (WHERE mismatched > 0),
                        sum(compared), sum(mismatched)
                   FROM pair_results p, unnest(%s::int[]) r(days)
-                 WHERE p.app_id = %s AND p.software_version = %s
+                 WHERE p.app_id = %s AND p.software_version = ANY(%s)
                    AND p.gw_ts > now() - make_interval(days => r.days)
                  GROUP BY 1, 2, 3
-                """, (list(RANGES), app_id, version)):
+                """, (list(RANGES), app_id, versions)):
             out[days][et]["kinds"][kind] = {"messages": n, "mismatched_messages": bad,
                                             "fields_compared": int(compared),
                                             "fields_mismatched": int(mismatched)}
@@ -574,19 +574,19 @@ class Scorer:
                 """
                 SELECT r.days, p.event_type, k, count(*)
                   FROM pair_results p, unnest(%s::int[]) r(days), jsonb_object_keys(p.mismatches) k
-                 WHERE p.app_id = %s AND p.software_version = %s AND p.mismatches IS NOT NULL
+                 WHERE p.app_id = %s AND p.software_version = ANY(%s) AND p.mismatches IS NOT NULL
                    AND p.gw_ts > now() - make_interval(days => r.days)
                  GROUP BY 1, 2, 3
-                """, (list(RANGES), app_id, version)):
+                """, (list(RANGES), app_id, versions)):
             out[days][et]["fields"][key] = n
         for et, kind, mismatches, gw_ts in self.conn.execute(
                 """
                 SELECT DISTINCT ON (event_type, pair_kind) event_type, pair_kind, mismatches, gw_ts
                   FROM pair_results
-                 WHERE app_id = %s AND software_version = %s AND mismatches IS NOT NULL
+                 WHERE app_id = %s AND software_version = ANY(%s) AND mismatches IS NOT NULL
                    AND gw_ts > now() - interval '180 days'
                  ORDER BY event_type, pair_kind, gw_ts DESC
-                """, (app_id, version)):
+                """, (app_id, versions)):
             for days in RANGES:
                 if gw_ts > self.now - timedelta(days=days):
                     out[days][et]["examples"].append({"kind": kind, "mismatches": mismatches})
@@ -686,27 +686,33 @@ class Scorer:
         }
 
     def score_version(self, app: dict, version: str) -> int:
+        """Score one version, or with version ALL_VERSIONS every version of the app on file
+        together (one card, so event types too thin to score in any one version add up)."""
         # A scorer can live for hours (followups' rebuild threads): stamp each card with its own time.
         self.now = datetime.now(timezone.utc)
         ranges = REF_RANGES if app["ref_group"] else RANGES
         other = app["ref_group"] is None
-        counts, behaviour = self._counts_and_behaviour(app["id"], version, ranges, other)
+        versions = [version] if version != ALL_VERSIONS else versions_on_file(self.conn, app["id"])
+        counts, behaviour = self._counts_and_behaviour(app["id"], versions, ranges, other)
         if not counts:
             self.conn.execute("DELETE FROM scorecards WHERE app_id = %s AND version = %s",
                               (app["id"], version))
             return 0
-        pairs = {} if app["ref_group"] else self._pairs(app["id"], version)
+        pairs = {} if app["ref_group"] else self._pairs(app["id"], versions)
         widest = max(d for d in ranges if counts.get(d))
         event_types = sorted({row[0] for row in counts[widest]})
         branches: dict[str, set[str]] = defaultdict(set)
         for row in counts[widest]:
             branches[row[0]].add("legacy" if row[1] == "legacy" else "live")
-        sample = self._sample(app["id"], version, event_types, widest, branches)
+        sample = self._sample(app["id"], versions, event_types, widest, branches)
         written = 0
         keep = [d for d in ranges if counts.get(d)]
         # Cards are built first, so the transaction that swaps them in lasts milliseconds.
         cards = [(days, self.card(app, version, days, counts[days], sample,
                                   behaviour.get(days, {}), pairs.get(days, {}))) for days in keep]
+        for _, card in cards:
+            card["all_versions"] = version == ALL_VERSIONS
+            card["version_count"] = len(versions)
         with self.conn.transaction():
             # Also clears cards left from the earlier per-range scheme (1/7/14/30/90/180 days).
             self.conn.execute("DELETE FROM scorecards WHERE app_id = %s AND version = %s"
@@ -729,6 +735,16 @@ class Scorer:
         return written
 
 
+# The version key of an app's all-versions card: every version on file scored together. Not a
+# real softwareVersion (those never contain "*" alone), and never in app_versions.
+ALL_VERSIONS = "*"
+
+
+def versions_on_file(conn: psycopg.Connection, app_id: int) -> list[str]:
+    return [v for (v,) in conn.execute("SELECT version FROM app_versions WHERE app_id = %s"
+                                       " AND last_seen > now() - interval '180 days'", (app_id,))]
+
+
 def due_versions(conn: psycopg.Connection, refresh_hours: int,
                  min_minutes: int) -> list[tuple]:
     """App versions whose cards are missing, behind their newest message (and at least
@@ -748,14 +764,36 @@ def due_versions(conn: psycopg.Connection, refresh_hours: int,
                 AND max(s.computed_at) < now() - make_interval(mins => %s))
             OR max(s.computed_at) < now() - make_interval(hours => %s)
          ORDER BY max(s.computed_at) NULLS FIRST, v.last_seen DESC
-        """, (min_minutes, refresh_hours)).fetchall()
+        """, (min_minutes, refresh_hours)).fetchall() + due_all_versions(conn, refresh_hours, min_minutes)
+
+
+def due_all_versions(conn: psycopg.Connection, refresh_hours: int, min_minutes: int) -> list[tuple]:
+    """All-versions cards due, for apps other than the reference apps with two or more versions
+    on file (with one, it would repeat the version's card). Scored after the version cards."""
+    return conn.execute(
+        """
+        SELECT a.id, a.software_name, a.ref_group, %s, s.computed_at
+          FROM apps a
+          LEFT JOIN scorecards s ON s.app_id = a.id AND s.version = %s
+         WHERE a.ref_group IS NULL
+           AND (SELECT count(*) FROM app_versions v WHERE v.app_id = a.id
+                 AND v.last_seen > now() - interval '180 days') >= 2
+           AND (s.computed_at IS NULL
+                OR (s.computed_at < a.last_seen AND s.computed_at < now() - make_interval(mins => %s))
+                OR s.computed_at < now() - make_interval(hours => %s))
+         ORDER BY s.computed_at NULLS FIRST, a.last_seen DESC
+        """, (ALL_VERSIONS, ALL_VERSIONS, min_minutes, refresh_hours)).fetchall()
 
 
 def run(conn: psycopg.Connection, settings: Settings, max_seconds: float = 600) -> None:
     started = time.monotonic()
-    conn.execute("DELETE FROM scorecards s WHERE NOT EXISTS (SELECT 1 FROM app_versions v"
+    conn.execute("DELETE FROM scorecards s WHERE s.version <> %s AND NOT EXISTS (SELECT 1 FROM app_versions v"
                  " WHERE v.app_id = s.app_id AND v.version = s.version"
-                 " AND v.last_seen > now() - interval '180 days')")
+                 " AND v.last_seen > now() - interval '180 days')", (ALL_VERSIONS,))
+    # An all-versions card only while the app has two or more versions on file.
+    conn.execute("DELETE FROM scorecards s WHERE s.version = %s AND (SELECT count(*) FROM app_versions v"
+                 " WHERE v.app_id = s.app_id AND v.last_seen > now() - interval '180 days') < 2",
+                 (ALL_VERSIONS,))
     # Reference-app cards cover the last REF_DAYS: a version that has gone quiet has nothing
     # left to show, and due_versions no longer visits it.
     conn.execute("DELETE FROM scorecards s USING apps a, app_versions v"

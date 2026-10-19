@@ -6,6 +6,8 @@
   .head .grade { font-size: 2rem; }
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 16px 0 18px; }
   .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+  .allv { border: 1px dashed var(--line); border-radius: 10px; padding: 8px 14px; margin: -6px 0 18px; font-size: .9rem; }
+  .allv-items { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 4px; font-variant-numeric: tabular-nums; }
   .tile .label { color: var(--text-2); font-size: .82rem; }
   .tile .value { font-size: 1.35rem; font-weight: 650; font-variant-numeric: tabular-nums; }
   details.row { border-top: 1px solid var(--line); }
@@ -46,7 +48,7 @@
 <div class="head">
   <span class="grade {{ st }}" aria-label="grade {{ c.grade or 'not scored' }}" tabindex="0" data-tip="{{ c.tip_grade }}">{{ c.grade or "–" }}</span>
   <div>
-    <h1>{{ c.app }} <span class="sub">{{ c.version }}</span></h1>
+    <h1>{{ c.app }} <span class="sub">{% if c.all_versions %}all {{ c.version_count }} versions{% else %}{{ c.version }}{% endif %}</span></h1>
     <div class="sub">
       {% if c.is_reference %}<span class="chip">reference app: {{ c.ref_group }}</span>{% endif %}
       <span tabindex="0" data-tip="{{ c.tip_grade }}">Score {{ c.score if c.score is not none else "not scored" }}</span> ·
@@ -69,6 +71,24 @@ send today, so a field the game added since may show as missing.</p>
   <div class="tile" tabindex="0" data-tip="{{ TIPS.tile_scored }}"><div class="label">Event types scored</div><div class="value">{{ scored | length }}</div></div>
   <div class="tile" tabindex="0" data-tip="{{ TIPS.tile_not_sent }}"><div class="label">Not sent (reference apps do)</div><div class="value">{{ c.not_sent | length }}</div>{% if c.not_yet %}<div class="muted" style="font-size:.8rem">+ {{ c.not_yet | length }} not seen in this version yet</div>{% endif %}</div>
 </div>
+
+{% if c.all_versions %}
+<p class="sub">Every version of {{ c.app }} on file, scored together as one card: event types too thin to score in any
+single version add up here. The current version's card says how the app behaves now; this one says how it has
+behaved overall, so a problem fixed in a later version still counts until those messages age out.</p>
+{% elif c.all_summary %}
+{% set a = c.all_summary %}
+<div class="allv">
+  <div class="allv-head"><strong>All versions</strong> <span class="muted">{{ a.version_count }} versions on file{% if a.oldest %}, since {{ a.oldest[:10] }}{% endif %}</span>
+    · <a href="/card/{{ c.app_id }}?v=*">open the all-versions card</a></div>
+  <div class="allv-items">
+    <span tabindex="0" data-tip="{{ TIPS.all_versions }}">{% if a.grade %}<span class="status {{ grade_status(a.grade) }}">{{ a.grade }} · {{ "%.1f" | format(a.score) }}</span>{% else %}<span class="muted">not graded</span>{% endif %}</span>
+    <span><span class="muted">Messages</span> {{ a.messages | n }}</span>
+    <span><span class="muted">Event types</span> {{ a.event_types }}</span>
+    {% if a.weak_spots %}<span class="weak" tabindex="0" data-tip="{{ a.weak_spots | weak_tip }}">{{ a.weak_spots | length }} weak spot{{ "s" if a.weak_spots | length > 1 }}</span>{% endif %}
+  </div>
+</div>
+{% endif %}
 
 {% if c.unrecognised %}
 <div class="panel warnbox">
@@ -272,6 +292,15 @@ send today, so a field the game added since may show as missing.</p>
   <div class="versions"><table>
     <tr><th>Version</th><th>Grade</th><th class="num">Score</th>
         <th class="num"><span tabindex="0" data-tip="{{ TIPS.versions_messages }}">Messages</span></th><th>First seen</th><th>Last seen</th></tr>
+    {% set allc = c if c.all_versions else c.all_summary %}
+    {% if allc %}
+    <tr{% if c.all_versions %} class="current"{% endif %}>
+      <td>{% if c.all_versions %}<strong>All versions</strong> <span class="muted">(this card)</span>{% else %}<a href="/card/{{ c.app_id }}?v=*">All versions</a>{% endif %}</td>
+      <td>{% if allc.grade %}<span class="status {{ grade_status(allc.grade) }}">{{ allc.grade }}</span>{% else %}<span class="muted">not graded</span>{% endif %}</td>
+      <td class="num">{{ "%.1f" | format(allc.score) if allc.score is not none else "–" }}</td>
+      <td class="num">{{ allc.messages | n }}</td><td colspan="2" class="muted">{{ allc.version_count }} versions together</td>
+    </tr>
+    {% endif %}
     {% for v in versions %}
     {% set here = v.version == c.version %}
     <tr{% if here %} class="current"{% endif %}>

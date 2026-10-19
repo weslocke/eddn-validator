@@ -28,6 +28,9 @@ STATIC = {
                 "than about six months) have no scorecard.",
     "versions_messages": "Messages from this version since it was first seen, before any were "
                          "removed by the 6-month retention.",
+    "all_versions": "Every version of this app on file scored together as one card. More data than any single "
+                    "version, so steadier for apps that release often; a problem fixed in a newer version still "
+                    "counts here until those messages age out.",
     "tile_messages": "Every message from this version on the card, all event types.",
     "tile_sent": "Kinds of event (schema, and journal event for journal/1) this version sent.",
     "tile_scored": "Kinds of event with enough messages (5 or more) to be scored.",
