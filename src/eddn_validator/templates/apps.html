@@ -21,11 +21,17 @@ that scorecard.</p>
     {% if first != ns.letter %}{% set ns.letter = first %}<li class="letter">{{ first }}</li>{% endif %}
     <li>
       <span class="row">
-        <span>{% if a.version is not none %}<a href="/card/{{ a.id }}?v={{ a.version | urlencode }}">{{ a.name or "(no name)" }}</a>
+        <span>{% if a.all %}<a href="/card/{{ a.id }}?v=*">{{ a.name or "(no name)" }}</a>
+        {% elif a.version is not none %}<a href="/card/{{ a.id }}?v={{ a.version | urlencode }}">{{ a.name or "(no name)" }}</a>
         {% else %}{{ a.name or "(no name)" }}{% endif %}
         {% if a.version is not none %}<span class="ver">{{ a.version }}</span>{% elif a.current is not none %}<span class="ver">{{ a.current }}</span>{% endif %}
         {% if a.ref %}<span class="chip">reference</span>{% endif %}</span>
-        {% if a.version is not none %}
+        {% if a.all %}
+        <span class="grade-cell" tabindex="0" data-tip="{{ TIPS.all_versions }}">
+          {% if a.all.grade %}<span class="status {{ grade_status(a.all.grade) }}">{{ a.all.grade }} · {{ "%.1f" | format(a.all.score) }}</span>{% else %}<span class="muted">not graded</span>{% endif %}
+          <span class="muted">all versions{% if a.version is not none and a.grade %} · current {{ a.version }}: {{ a.grade }} {{ "%.1f" | format(a.score) }}{% endif %}</span></span>
+        {% if a.all.weak_spots %}<span class="weak" tabindex="0" data-tip="{{ a.all.weak_spots | weak_tip }}">{{ a.all.weak_spots | length }} weak spot{{ "s" if a.all.weak_spots | length > 1 }}</span>{% endif %}
+        {% elif a.version is not none %}
         <span class="grade-cell" tabindex="0" data-tip="{% if a.grade %}Grade {{ a.grade }}, score {{ a.score | round(1) }} out of 100, for version {{ a.version }}.{% else %}Version {{ a.version }} sent too few messages to be graded.{% endif %}">
           {% if a.grade %}<span class="status {{ grade_status(a.grade) }}">{{ a.grade }} · {{ "%.1f" | format(a.score) }}</span>{% else %}<span class="muted">not graded</span>{% endif %}</span>
         {% if a.weak_spots %}<span class="weak" tabindex="0" data-tip="{{ a.weak_spots | weak_tip }}">{{ a.weak_spots | length }} weak spot{{ "s" if a.weak_spots | length > 1 }}</span>{% endif %}

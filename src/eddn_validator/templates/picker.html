@@ -67,9 +67,15 @@ send? Pick an application, then a version.</p>
       <td data-sort="{{ a.last_seen.timestamp() if a.last_seen else 0 }}">{{ a.last_seen | when }}</td>
       <td class="num" data-sort="{{ a.versions }}">{{ a.versions }}</td>
       <td class="num" data-sort="{{ a.messages }}">{{ "{:,}".format(a.messages) }}</td>
+      {% if a.all %}
+      <td data-sort="{{ a.all.score if a.all.score is not none else -1 }}"><a href="/card/{{ a.id }}?v=*"><span class="status {{ grade_status(a.all.grade) }}">{{ a.all.grade or "not graded" }}{% if a.all.score is not none %} · {{ "%.1f" | format(a.all.score) }}{% endif %}</span></a>
+          <br><span class="muted" tabindex="0" data-tip="{{ TIPS.all_versions }}">all versions{% if a.has_card and a.grade %} · current {{ a.latest }}: {{ a.grade }} {{ "%.1f" | format(a.score) }}{% endif %}</span>
+          {% if a.all.weak_spots %}<br><span class="weak" tabindex="0" data-tip="{{ a.all.weak_spots | weak_tip }}">{{ a.all.weak_spots | length }} weak spot{{ "s" if a.all.weak_spots | length > 1 }}</span>{% endif %}</td>
+      {% else %}
       <td data-sort="{{ a.score if a.score is not none else (-1 if a.has_card else -2) }}">{% if a.has_card %}<a href="/card/{{ a.id }}?v={{ a.latest | urlencode }}"><span class="status {{ grade_status(a.grade) }}">{{ a.grade or "not graded (too few messages)" }}{% if a.score is not none %} · {{ "%.1f" | format(a.score) }}{% endif %}</span></a>
           {% if a.weak_spots %}<br><span class="weak" tabindex="0" data-tip="{{ a.weak_spots | weak_tip }}">{{ a.weak_spots | length }} weak spot{{ "s" if a.weak_spots | length > 1 }}</span>{% endif %}
           {% else %}<span class="muted">scorecard pending (within the hour)</span>{% endif %}</td>
+      {% endif %}
     </tr>
     {% endfor %}
     </tbody>

@@ -173,7 +173,7 @@ def rebuild_other_cards(settings: Settings, limit: int | None = None) -> None:
     slices. Reference apps aren't paired, so their cards are left to the worker."""
     from concurrent.futures import ThreadPoolExecutor
 
-    from .scorer import Scorer
+    from .scorer import ALL_VERSIONS, Scorer
 
     with _connect(settings) as conn:
         todo = conn.execute(
@@ -184,6 +184,17 @@ def rebuild_other_cards(settings: Settings, limit: int | None = None) -> None:
              ORDER BY v.msg_count, v.last_seen DESC
              LIMIT %s
             """, (limit,)).fetchall()
+        # Then the all-versions cards (scorer.ALL_VERSIONS), smallest app first: each covers
+        # every version on file, so they are the biggest and come last.
+        todo += conn.execute(
+            """
+            SELECT a.id, a.software_name, a.ref_group, %s
+              FROM apps a JOIN app_versions v ON v.app_id = a.id
+             WHERE a.ref_group IS NULL AND v.last_seen > now() - interval '180 days'
+             GROUP BY a.id, a.software_name, a.ref_group
+            HAVING count(*) >= 2
+             ORDER BY sum(v.msg_count)
+            """, (ALL_VERSIONS,)).fetchall()
     log.info("rebuilding %d other-app scorecards, %d at a time", len(todo), REBUILD_THREADS)
     started = time.monotonic()
     # One shared queue, so the threads take versions strictly in size order.

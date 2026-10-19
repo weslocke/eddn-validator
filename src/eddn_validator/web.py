@@ -159,6 +159,14 @@ def _versions_by_app(conn, app_ids: list[int] | None = None) -> dict[int, list[d
     return {app_id: newest_first(vs) for app_id, vs in out.items()}
 
 
+def _all_versions_cards(conn, app_ids: list[int] | None = None) -> dict[int, dict]:
+    """Each app's all-versions card (grade, score, weak spots), where it has one."""
+    rows = conn.execute("SELECT app_id, grade, score, weak_spots FROM scorecards WHERE version = %s"
+                        " AND (%s::int[] IS NULL OR app_id = ANY(%s::int[]))",
+                        (ALL_VERSIONS, app_ids, app_ids)).fetchall()
+    return {a: {"grade": g, "score": s, "weak_spots": w or []} for a, g, s, w in rows}
+
+
 def load_apps() -> list[dict]:
     with _connect() as conn:
         apps = conn.execute("SELECT id, software_name, ref_group FROM apps"
@@ -199,6 +207,7 @@ def load_new_apps() -> dict:
              LIMIT 200
             """, (NEW_APP_DAYS, data_since)).fetchall()
         versions = _versions_by_app(conn, [r[0] for r in rows])
+        combined = _all_versions_cards(conn, [r[0] for r in rows])
     apps = []
     for app_id, name, first, last in rows:
         vs = versions.get(app_id)
@@ -209,7 +218,8 @@ def load_new_apps() -> dict:
                      "versions": len(vs), "messages": sum(v["messages"] for v in vs),
                      "latest": shown["version"], "has_card": shown["has_card"],
                      "grade": shown["grade"], "score": shown["score"],
-                     "weak_spots": shown["weak_spots"], "newest": vs[0]["version"]})
+                     "weak_spots": shown["weak_spots"], "newest": vs[0]["version"],
+                     "all": combined.get(app_id)})
     return {"apps": apps, "data_since": data_since, "since": since}
 
 
@@ -220,6 +230,7 @@ def load_all_apps() -> list[dict]:
         apps = conn.execute("SELECT id, software_name, ref_group, last_seen FROM apps"
                             " ORDER BY lower(software_name), software_name").fetchall()
         versions = _versions_by_app(conn)
+        combined = _all_versions_cards(conn)
     recent = datetime.now(timezone.utc) - timedelta(days=180)
     out = []
     for app_id, name, group, last in apps:
@@ -231,6 +242,7 @@ def load_all_apps() -> list[dict]:
                     "grade": graded["grade"] if graded else None,
                     "score": graded["score"] if graded else None,
                     "weak_spots": graded["weak_spots"] if graded else [],
+                    "all": combined.get(app_id),
                     "recent": last is not None and last > recent,
                     "current": vs[0]["version"] if vs else None,
                     # A newest version with nothing left on file will never get a card.
