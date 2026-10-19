@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% set c = card %}
-{% block title %}{{ c.app }} {{ c.version }} scorecard{% endblock %}
+{% block title %}{{ c.app }} {{ "all versions" if c.all_versions else c.version }} scorecard{% endblock %}
 {% block style %}
   .head { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
   .head .grade { font-size: 2rem; }
