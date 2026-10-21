@@ -14,10 +14,13 @@ Days are the owner's local days (America/New_York).
 from __future__ import annotations
 
 import datetime as dt
+import logging
 import time
 from zoneinfo import ZoneInfo
 
 import psycopg
+
+log = logging.getLogger(__name__)
 
 OUTRIDER = "ED Outrider"
 LOCAL = ZoneInfo("America/New_York")
@@ -155,22 +158,29 @@ class Stats:
                  GROUP BY d
                 """, (self.app_id, day_bounds(first)[0]))
         }
+        # Finished days come from the nightly table (refresh_days); only a day it lacks is
+        # worked out here, and kept for an hour.
+        stored = dict(self.conn.execute(
+            "SELECT day, commanders FROM outrider_days WHERE app_id = %s AND day >= %s AND day < %s",
+            (self.app_id, first, today)).fetchall())
         out = []
         for n in range(days):
             day = today - dt.timedelta(days=n)
             key = (self.app_id, day)
             cached = _past_days.get(key)
             if today_result is not None and day == today_result[0]:
-                groups = today_result[2]
+                commanders = len(today_result[2])
+            elif day in stored:
+                commanders = stored[day]
             elif day != today and cached and time.monotonic() - cached[0] < PAST_DAY_TTL:
-                _, groups = cached[1]
+                commanders = len(cached[1][1])
             else:
                 result = self.commanders(day)
                 if day != today:
                     _past_days[key] = (time.monotonic(), result)
-                groups = result[1]
+                commanders = len(result[1])
             mine, others = counts.get(day, (0, 0))
-            out.append({"day": day, "mine": mine, "others": others, "commanders": len(groups)})
+            out.append({"day": day, "mine": mine, "others": others, "commanders": commanders})
         return out
 
     def versions(self, since: dt.datetime) -> list[dict]:
@@ -192,3 +202,51 @@ class Stats:
              GROUP BY event_type, is_test ORDER BY 3 DESC, 4 DESC
             """, (self.app_id, since)).fetchall()
         return [dict(zip(("event_type", "is_test", "others", "mine", "last"), r)) for r in rows]
+
+
+# Days recomputed every night: messages can arrive late (apps sending old journals, EDDN
+# catching up after an outage) and mark-mine can still judge them, so a week is redone.
+RECOMPUTE_DAYS = 7
+NIGHTLY_HOUR = 3            # local (New York) hour after which the nightly run happens
+NIGHTLY_STATE = "outrider_days_run"
+
+
+def refresh_days(conn: psycopg.Connection, recompute: int = RECOMPUTE_DAYS) -> int:
+    """Store finished days up to yesterday: every day not stored yet, and the last `recompute`
+    days again. Returns the number of days computed."""
+    stats = Stats(conn)
+    if stats.app_id is None:
+        return 0
+    first = conn.execute("SELECT min(gw_ts) FROM messages WHERE app_id = %s", (stats.app_id,)).fetchone()[0]
+    if first is None:
+        return 0
+    today = dt.datetime.now(LOCAL).date()
+    have = {d for (d,) in conn.execute("SELECT day FROM outrider_days WHERE app_id = %s", (stats.app_id,))}
+    day, todo = first.astimezone(LOCAL).date(), []
+    while day < today:
+        if day not in have or day >= today - dt.timedelta(days=recompute):
+            todo.append(day)
+        day += dt.timedelta(days=1)
+    for day in todo:
+        messages, groups = stats.commanders(day)
+        conn.execute(
+            """
+            INSERT INTO outrider_days (app_id, day, messages, commanders, computed_at)
+            VALUES (%s, %s, %s, %s, now())
+            ON CONFLICT (app_id, day) DO UPDATE SET messages = EXCLUDED.messages,
+                commanders = EXCLUDED.commanders, computed_at = EXCLUDED.computed_at
+            """, (stats.app_id, day, messages, len(groups)))
+    return len(todo)
+
+
+def nightly(conn: psycopg.Connection) -> None:
+    """The worker calls this hourly; it refreshes the stored days once a day, after 3 AM."""
+    now = dt.datetime.now(LOCAL)
+    stamp = int(now.strftime("%Y%m%d"))
+    done = conn.execute("SELECT value FROM job_state WHERE name = %s", (NIGHTLY_STATE,)).fetchone()
+    if now.hour < NIGHTLY_HOUR or (done and done[0] >= stamp):
+        return
+    n = refresh_days(conn)
+    conn.execute("INSERT INTO job_state (name, value) VALUES (%s, %s) ON CONFLICT (name)"
+                 " DO UPDATE SET value = EXCLUDED.value, updated_at = now()", (NIGHTLY_STATE, stamp))
+    log.info("outrider days: %d days stored", n)
