@@ -39,6 +39,7 @@ def jobs(settings: Settings) -> list[Job]:
             lambda conn: profiles.build(conn, load_rules(settings.load_yaml("rules.yaml")),
                                         settings.load_yaml("scoring.yaml"))),
         Job("scorecards", 900, lambda conn: scorer.run(conn, settings)),
+        Job("all_versions", 1800, lambda conn: scorer.run_all_versions(conn, settings)),
         Job("analyze", 24 * 3600, indexes.analyze_yesterday),
         # Hourly check; the Outrider page's finished days are worked out once a night after 3 AM.
         Job("outrider_days", 3600, outrider.nightly),

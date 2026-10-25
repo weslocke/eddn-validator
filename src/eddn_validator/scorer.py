@@ -764,12 +764,14 @@ def due_versions(conn: psycopg.Connection, refresh_hours: int,
                 AND max(s.computed_at) < now() - make_interval(mins => %s))
             OR max(s.computed_at) < now() - make_interval(hours => %s)
          ORDER BY max(s.computed_at) NULLS FIRST, v.last_seen DESC
-        """, (min_minutes, refresh_hours)).fetchall() + due_all_versions(conn, refresh_hours, min_minutes)
+        """, (min_minutes, refresh_hours)).fetchall()
 
 
-def due_all_versions(conn: psycopg.Connection, refresh_hours: int, min_minutes: int) -> list[tuple]:
+def due_all_versions(conn: psycopg.Connection, refresh_hours: int) -> list[tuple]:
     """All-versions cards due, for apps other than the reference apps with two or more versions
-    on file (with one, it would repeat the version's card). Scored after the version cards."""
+    on file (with one, it would repeat the version's card): missing, or older than refresh_hours.
+    They change slowly, so new messages alone don't make one due; run_all_versions has its own
+    job, so these never wait behind the version cards (which starved them in one shared run)."""
     return conn.execute(
         """
         SELECT a.id, a.software_name, a.ref_group, %s, s.computed_at
@@ -778,11 +780,9 @@ def due_all_versions(conn: psycopg.Connection, refresh_hours: int, min_minutes: 
          WHERE a.ref_group IS NULL
            AND (SELECT count(*) FROM app_versions v WHERE v.app_id = a.id
                  AND v.last_seen > now() - interval '180 days') >= 2
-           AND (s.computed_at IS NULL
-                OR (s.computed_at < a.last_seen AND s.computed_at < now() - make_interval(mins => %s))
-                OR s.computed_at < now() - make_interval(hours => %s))
+           AND (s.computed_at IS NULL OR s.computed_at < now() - make_interval(hours => %s))
          ORDER BY s.computed_at NULLS FIRST, a.last_seen DESC
-        """, (ALL_VERSIONS, ALL_VERSIONS, min_minutes, refresh_hours)).fetchall()
+        """, (ALL_VERSIONS, ALL_VERSIONS, refresh_hours)).fetchall()
 
 
 def run(conn: psycopg.Connection, settings: Settings, max_seconds: float = 600) -> None:
@@ -814,6 +814,23 @@ def run(conn: psycopg.Connection, settings: Settings, max_seconds: float = 600) 
         done += 1
     log.info("scorecards: %d of %d due app versions scored (%d cards) in %.0fs",
              done, len(due), cards, time.monotonic() - started)
+
+
+def run_all_versions(conn: psycopg.Connection, settings: Settings, max_seconds: float = 600) -> None:
+    """The all-versions cards' own job: oldest first, within its own time budget."""
+    started = time.monotonic()
+    scorer = Scorer(conn, settings)
+    due = due_all_versions(conn, int(scorer.cfg.get("all_versions_refresh_hours", 24)))
+    done = 0
+    for app_id, name, group, version, _ in due:
+        if time.monotonic() - started > max_seconds:
+            break
+        try:
+            scorer.score_version({"id": app_id, "name": name, "ref_group": group}, version)
+        except Exception:
+            log.exception("scoring %s all versions failed", name)
+        done += 1
+    log.info("all-versions cards: %d of %d due scored in %.0fs", done, len(due), time.monotonic() - started)
 
 
 def score_one(conn: psycopg.Connection, settings: Settings, app_name: str, version: str) -> dict:

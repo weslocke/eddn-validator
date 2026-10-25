@@ -75,6 +75,7 @@ grades:
 # How often cards are recomputed: when the app version has new messages, and
 # at least this often regardless (ranges move on even without new data).
 refresh_hours: 6
+all_versions_refresh_hours: 24   # all-versions cards (their own worker job): once a day is plenty
 # ...but not more often than this, so busy app versions don't keep the worker
 # scoring non-stop.
 min_recompute_minutes: 60
