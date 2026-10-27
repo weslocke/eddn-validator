@@ -13,6 +13,7 @@ Days are the owner's local days (America/New_York).
 
 from __future__ import annotations
 
+import bisect
 import datetime as dt
 import logging
 import time
@@ -46,6 +47,17 @@ def position(message: object) -> tuple[float, float, float, str | None] | None:
     return None
 
 
+def _close_in_time(a: list[float], b: list[float]) -> bool:
+    """Whether any time in sorted a is within NEAR_S of any time in sorted b."""
+    if len(a) > len(b):
+        a, b = b, a
+    for t in a:
+        k = bisect.bisect_left(b, t - NEAR_S)
+        if k < len(b) and b[k] <= t + NEAR_S:
+            return True
+    return False
+
+
 def group_commanders(points: list[tuple[float, str | None, tuple[float, float, float],
                                         str | None, dt.datetime]]) -> list[dict]:
     """Group (epoch, uploader, xyz, system, received) points into estimated commanders.
@@ -67,20 +79,34 @@ def group_commanders(points: list[tuple[float, str | None, tuple[float, float, f
                 parent[root(i)] = root(last_of[uploader])
             last_of[uploader] = i
 
+    # Points at one position are one commander (distance 0), so pairs are checked between distinct
+    # positions only: a busy day's thousands of messages come from a few hundred systems. Two
+    # positions link when close enough, or nearer than NEAR_LY with any of their messages within
+    # NEAR_S of each other; the same links as comparing every pair of points.
+    at: dict[tuple[float, float, float], list[int]] = {}
+    for i, p in enumerate(points):
+        at.setdefault(tuple(p[2]), []).append(i)
+    first, times = [], []
+    for members in at.values():
+        for i in members[1:]:
+            parent[root(i)] = root(members[0])
+        first.append(members[0])
+        times.append(sorted(points[i][0] for i in members))
+
     # Pairs only among neighbouring cells of a NEAR_LY grid; NEAR_LY >= LINK_LY, so no link is missed.
     cells: dict[tuple[int, int, int], list[int]] = {}
-    for i, p in enumerate(points):
-        cells.setdefault(tuple(int(v // NEAR_LY) for v in p[2]), []).append(i)
+    for k, i in enumerate(first):
+        cells.setdefault(tuple(int(v // NEAR_LY) for v in points[i][2]), []).append(k)
     for (cx, cy, cz), members in cells.items():
-        near = [j for dx in (-1, 0, 1) for dy in (-1, 0, 1) for dz in (-1, 0, 1)
-                for j in cells.get((cx + dx, cy + dy, cz + dz), ())]
-        for i in members:
-            for j in near:
-                if j <= i:
+        near = [m for dx in (-1, 0, 1) for dy in (-1, 0, 1) for dz in (-1, 0, 1)
+                for m in cells.get((cx + dx, cy + dy, cz + dz), ())]
+        for k in members:
+            for m in near:
+                i, j = first[k], first[m]
+                if m <= k or root(i) == root(j):
                     continue
                 d2 = sum((a - b) ** 2 for a, b in zip(points[i][2], points[j][2]))
-                if d2 <= LINK_LY ** 2 or (abs(points[j][0] - points[i][0]) <= NEAR_S
-                                          and d2 <= NEAR_LY ** 2):
+                if d2 <= LINK_LY ** 2 or (d2 <= NEAR_LY ** 2 and _close_in_time(times[k], times[m])):
                     parent[root(i)] = root(j)
 
     groups: dict[int, dict] = {}

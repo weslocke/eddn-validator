@@ -63,3 +63,37 @@ def test_message_key_matches_relay_number_formatting():
     relayed = {"a": 2, "b": 1, "StarPos": [3324, -1.5, 0], "timestamp": "t"}
     assert message_key("ref", sent) == message_key("ref", relayed)
     assert message_key("ref", sent) != message_key("ref/test", relayed)
+
+
+def _every_pair(points):
+    """The grouping by comparing every pair of points: the rule group_commanders must match."""
+    from eddn_validator.outrider import LINK_LY, NEAR_LY, NEAR_S
+    parent = list(range(len(points)))
+
+    def root(i):
+        while parent[i] != i:
+            i = parent[i]
+        return i
+    for i, a in enumerate(points):
+        for j in range(i + 1, len(points)):
+            b = points[j]
+            d2 = sum((p - q) ** 2 for p, q in zip(a[2], b[2]))
+            if (a[1] is not None and a[1] == b[1]) or d2 <= LINK_LY ** 2 or (
+                    abs(a[0] - b[0]) <= NEAR_S and d2 <= NEAR_LY ** 2):
+                parent[root(i)] = root(j)
+    sizes = {}
+    for i in range(len(points)):
+        sizes[root(i)] = sizes.get(root(i), 0) + 1
+    return sorted(sizes.values())
+
+
+def test_grouping_matches_every_pair_comparison():
+    import random
+    rng = random.Random(7)
+    for _ in range(40):
+        # A few commanders' worth of systems, each reported many times, some near each other.
+        systems = [tuple(rng.choice((0, 500, 650, 2000)) + rng.uniform(-400, 400) for _ in range(3))
+                   for _ in range(rng.randint(1, 25))]
+        points = [point(rng.uniform(0, 86400), rng.choice((None, None, "h1", "h2", "h3")), rng.choice(systems))
+                  for _ in range(rng.randint(1, 120))]
+        assert sorted(g["messages"] for g in group_commanders(points)) == _every_pair(points)
